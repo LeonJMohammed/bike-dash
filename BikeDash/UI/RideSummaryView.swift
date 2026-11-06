@@ -1,54 +1,65 @@
 import BikeDashCore
 import SwiftUI
 
-/// Shown after Hold to stop, until New ride.
+/// A finished ride's numbers, in the same tile style as the ride screen.
 struct RideSummaryView: View {
-    let ride: RideController
+    let record: RideRecord
+    /// Set right after a ride: a DONE button that clears it for the next one.
+    var onDone: (() -> Void)?
 
     var body: some View {
-        let session = ride.session
-        let end = session.finishedAt ?? Date()
-        VStack(spacing: 20) {
-            Spacer(minLength: 0)
-            Text("Ride finished")
-                .font(.largeTitle.bold())
+        VStack(spacing: 0) {
+            Text(title)
+                .font(Theme.label)
                 .foregroundStyle(Color.white)
-            VStack(spacing: 12) {
-                row("Distance", RideFormat.distance(session.distance) + " km")
-                row("Moving time", RideFormat.duration(session.movingTime(at: end)))
-                row("Elapsed", RideFormat.duration(session.elapsedTime(at: end)))
-                row("Average speed", session.averageSpeed(at: end).map { RideFormat.speed($0) + " km/h" } ?? "--")
-                row("Max speed", RideFormat.speed(session.maxSpeed) + " km/h")
-                row("Average heart rate", session.averageHeartRate.map { "\($0) bpm" } ?? "--")
-                row("Max heart rate", session.maxHeartRate > 0 ? "\(session.maxHeartRate) bpm" : "--")
-            }
-            .font(.title3)
-            Text("Garmin has the full record of this ride.")
+                .padding(.vertical, 14)
+            HorizontalRule()
+            pair("DISTANCE", RideFormat.distance(record.distance), "MOVING TIME", RideFormat.clock(record.movingTime))
+            HorizontalRule()
+            pair(
+                "AVG SPEED", record.averageSpeed.map { RideFormat.speed($0) } ?? "--",
+                "MAX SPEED", RideFormat.speed(record.maxSpeed)
+            )
+            HorizontalRule()
+            pair("ASCENT", RideFormat.metres(record.ascent), "AVG PACE", RideFormat.pace(record.averagePace))
+            HorizontalRule()
+            pair(
+                "AVG HR", record.averageHeartRate.map { "\($0)" } ?? "--",
+                "MAX HR", record.maxHeartRate.map { "\($0)" } ?? "--"
+            )
+            HorizontalRule()
+            Text("Elapsed \(RideFormat.clock(record.elapsedTime)) · Garmin has the full record")
                 .font(.footnote)
-                .foregroundStyle(Color.gray)
+                .foregroundStyle(Theme.dim)
+                .padding(.vertical, 12)
             Spacer(minLength: 0)
-            Button {
-                ride.newRide()
-            } label: {
-                Text("New ride")
-                    .font(.title2.weight(.bold))
-                    .frame(maxWidth: .infinity, minHeight: 64)
-                    .background(Color.green, in: RoundedRectangle(cornerRadius: 16))
-                    .foregroundStyle(Color.black)
+            if let onDone {
+                Button(action: onDone) {
+                    Text("DONE")
+                        .font(Theme.buttonTitle)
+                        .frame(maxWidth: .infinity, minHeight: 76)
+                        .background(Theme.red)
+                        .foregroundStyle(Color.white)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
-        .padding(24)
+        .background(Color.black)
     }
 
-    private func row(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .foregroundStyle(Color.gray)
-            Spacer()
-            Text(value)
-                .monospacedDigit()
-                .foregroundStyle(Color.white)
+    private var title: String {
+        if onDone != nil { return "RIDE FINISHED" }
+        return record.startedAt
+            .formatted(.dateTime.weekday(.wide).day().month(.wide).hour().minute())
+            .uppercased()
+    }
+
+    private func pair(_ leftLabel: String, _ leftValue: String, _ rightLabel: String, _ rightValue: String) -> some View {
+        HStack(spacing: 0) {
+            MetricTile(label: leftLabel, value: leftValue, size: 54)
+            VerticalRule()
+            MetricTile(label: rightLabel, value: rightValue, size: 54)
         }
+        .frame(height: 110)
     }
 }

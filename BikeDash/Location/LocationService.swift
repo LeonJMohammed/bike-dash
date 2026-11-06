@@ -38,6 +38,10 @@ final class LocationService: NSObject {
     }
 
     func start() {
+        if DemoMode.isOn {
+            startDemo()
+            return
+        }
         wantsTracking = true
         switch manager.authorizationStatus {
         case .notDetermined:
@@ -56,6 +60,13 @@ final class LocationService: NSObject {
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
         lastFixAt = nil
+    }
+
+    /// Demo mode (simulator screenshots): GPS looks on; fixes come from DemoMode.
+    func startDemo() {
+        isTracking = true
+        accuracy = 4
+        lastFixAt = Date()
     }
 
     private func begin() {

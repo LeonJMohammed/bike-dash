@@ -24,8 +24,10 @@ final class HeartRateService: NSObject {
     private(set) var latestAt: Date?
     private(set) var packetCount = 0
 
-    @ObservationIgnored private var central: CBCentralManager!
+    @ObservationIgnored private var central: CBCentralManager?
     @ObservationIgnored private var watch: CBPeripheral?
+    /// Demo mode (simulator screenshots): a fixed reading and no Bluetooth.
+    @ObservationIgnored private var demoBPM: Int?
 
     private static let serviceID = CBUUID(string: "180D")
     private static let measurementID = CBUUID(string: "2A37")
@@ -33,6 +35,12 @@ final class HeartRateService: NSObject {
 
     override init() {
         super.init()
+        if DemoMode.isOn {
+            state = .connected
+            deviceName = "Forerunner 165"
+            demoBPM = 142
+            return
+        }
         central = CBCentralManager(delegate: self, queue: nil, options: [
             CBCentralManagerOptionRestoreIdentifierKey: "com.jlmoh.bikedash.heart-rate",
         ])
@@ -40,15 +48,28 @@ final class HeartRateService: NSObject {
 
     /// The latest heart rate, or nil once the broadcast has been quiet for `staleAfter`.
     func bpm(at now: Date) -> Int? {
+        if let demoBPM { return demoBPM }
         guard let latest, let latestAt, now.timeIntervalSince(latestAt) <= Self.staleAfter else {
             return nil
         }
         return latest.bpm
     }
 
+    var statusText: String {
+        switch state {
+        case .starting: return "Starting Bluetooth"
+        case .bluetoothOff: return "Bluetooth is off"
+        case .notAllowed: return "Bluetooth not allowed (Settings > Bike Dash)"
+        case .unsupported: return "No Bluetooth LE"
+        case .searching: return "Looking for a broadcast"
+        case .waiting: return "Waiting for the watch"
+        case .connected: return "Connected"
+        }
+    }
+
     /// Forgets the remembered watch and looks for one again.
     func forgetWatch() {
-        if let watch { central.cancelPeripheralConnection(watch) }
+        if let watch { central?.cancelPeripheralConnection(watch) }
         watch = nil
         deviceName = nil
         latest = nil
@@ -64,7 +85,7 @@ final class HeartRateService: NSObject {
     }
 
     private func findWatch() {
-        guard central.state == .poweredOn else { return }
+        guard let central, central.state == .poweredOn else { return }
         if let watch {
             // Restored by iOS after a background relaunch, or found earlier.
             if watch.state == .connected { subscribe(watch) } else { link(watch) }
@@ -88,6 +109,7 @@ final class HeartRateService: NSObject {
     }
 
     private func link(_ peripheral: CBPeripheral) {
+        guard let central else { return }
         if central.isScanning { central.stopScan() }
         adopt(peripheral)
         state = .waiting
@@ -114,7 +136,7 @@ final class HeartRateService: NSObject {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard let self, self.watch?.identifier == peripheral.identifier else { return }
-            self.central.connect(peripheral)
+            self.central?.connect(peripheral)
         }
     }
 }

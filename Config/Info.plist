@@ -28,6 +28,25 @@
 	<string>Bike Dash reads the heart rate your watch broadcasts.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Bike Dash uses GPS for your speed and distance while you ride.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Bike Dash uses the barometer to count how much you climb.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>spotify</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.jlmoh.bikedash</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bikedash</string>
+			</array>
+		</dict>
+	</array>
+	<key>SpotifyClientID</key>
+	<string>$(SPOTIFY_CLIENT_ID)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

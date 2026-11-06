@@ -2,23 +2,29 @@ import SwiftUI
 
 struct RootView: View {
     let ride: RideController
+    let spotify: SpotifyController
+    let history: RideHistory
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            if ride.session.state == .finished {
-                RideSummaryView(ride: ride)
-            } else {
-                DashboardView(ride: ride)
+        MainView(ride: ride, spotify: spotify, history: history)
+            .onOpenURL { spotify.handle($0) }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                switch phase {
+                case .active:
+                    ride.appBecameActive()
+                    spotify.appBecameActive()
+                case .background:
+                    ride.appWentToBackground()
+                    spotify.appWentToBackground()
+                default:
+                    break
+                }
             }
-        }
-        .onChange(of: scenePhase, initial: true) { _, phase in
-            switch phase {
-            case .active: ride.appBecameActive()
-            case .background: ride.appWentToBackground()
-            default: break
+            .task {
+                if DemoMode.isOn {
+                    DemoMode.load(ride: ride, spotify: spotify, history: history)
+                }
             }
-        }
     }
 }

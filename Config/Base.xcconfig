@@ -5,4 +5,7 @@
 // Git commit shown in the app. The build script passes the real one.
 BIKEDASH_COMMIT = dev
 
+// Empty unless Secrets.xcconfig sets it; the Music page then says "not set up".
+SPOTIFY_CLIENT_ID =
+
 #include? "Secrets.xcconfig"

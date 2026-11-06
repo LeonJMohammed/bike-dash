@@ -100,6 +100,7 @@ public struct GPSTrack: Sendable {
         jumpsInARow = 0
         lastFix = fix
         window.append(fix)
-        window.removeAll { fix.time.timeIntervalSince($0.time) > settings.speedWindow }
+        let maxAge = settings.speedWindow  // a local, so the closure doesn't touch self
+        window.removeAll { fix.time.timeIntervalSince($0.time) > maxAge }
     }
 }

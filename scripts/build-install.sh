@@ -26,9 +26,11 @@ echo "== Generating the Xcode project"
 xcodegen generate --quiet
 
 echo "== Building $commit (build $build)"
+# Building for the phone itself (not generic iOS) lets Xcode register it with
+# the free team, which a free profile needs. The phone must be reachable.
 if ! xcodebuild \
     -project BikeDash.xcodeproj -scheme BikeDash -configuration Release \
-    -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED" \
+    -destination "id=$DEVICE_ID" -derivedDataPath "$DERIVED" \
     -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
     CURRENT_PROJECT_VERSION="$build" BIKEDASH_COMMIT="$commit" \
     build > "$buildlog" 2>&1; then

@@ -17,6 +17,9 @@ settings:
 packages:
   BikeDashCore:
     path: Packages/BikeDashCore
+  SpotifyiOS:
+    url: https://github.com/spotify/ios-sdk
+    exactVersion: 5.0.1
 targets:
   BikeDash:
     type: application
@@ -25,6 +28,7 @@ targets:
       - path: BikeDash
     dependencies:
       - package: BikeDashCore
+      - package: SpotifyiOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jlmoh.bikedash

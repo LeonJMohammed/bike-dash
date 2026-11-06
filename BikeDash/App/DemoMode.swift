@@ -2,7 +2,7 @@ import BikeDashCore
 import Foundation
 
 /// For simulator screenshots only. Launch with `-demo ride|paused|finished|idle|history`,
-/// and optionally `-tab history|computer|settings` and `-page 1` (music).
+/// and optionally `-sheet history|settings`.
 /// Shows fake data, uses no Bluetooth, GPS, barometer or Spotify, and saves nothing.
 enum DemoMode {
     static let scene: String? = UserDefaults.standard.string(forKey: "demo")

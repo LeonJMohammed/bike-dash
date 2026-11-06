@@ -55,12 +55,12 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 4. From the PC: put the phone's identifier (`xcrun devicectl list devices`) in `~/.config/bike-dash/refresh.env` as `DEVICE_ID=...`, then `.\scripts\pc\mac.ps1 build -Launch` with the phone unplugged.
 
 ## Spotify
-- The Music page uses the Spotify iOS SDK (App Remote) through the Spotify app. Spotify has to be playing to connect, so **Connect** opens Spotify, starts the music and comes back with a token that's good for an hour.
+- The music bar under the numbers uses the Spotify iOS SDK (App Remote) through the Spotify app. Spotify has to be playing to connect, so **Connect** opens Spotify, starts the music and comes back with a token that's good for an hour.
 - The Spotify developer app needs the redirect URI `bikedash://spotify-login-callback` and the iOS bundle ID `com.jlmoh.bikedash`. Development mode requires the owner to have Premium and allows up to 5 users.
 - The Client ID goes in `Config/Secrets.xcconfig` on the Mac as `SPOTIFY_CLIENT_ID`.
 
 ## Simulator screenshots
-`ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|paused|finished|idle|history [-tab settings] [-page 1]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware.
+`ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|paused|finished|idle|history [-sheet history|settings]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware.
 
 ## Mac-only files (never in git)
 - `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, later `SPOTIFY_CLIENT_ID`

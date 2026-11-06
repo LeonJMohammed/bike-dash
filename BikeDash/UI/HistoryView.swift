@@ -4,6 +4,7 @@ import SwiftUI
 /// Finished rides, newest first. Tap one for its numbers; swipe to delete.
 struct HistoryView: View {
     let history: RideHistory
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,11 @@ struct HistoryView: View {
             .background(Color.black)
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
             .navigationDestination(for: RideRecord.self) { record in
                 RideSummaryView(record: record)
             }

@@ -44,7 +44,7 @@ struct RideSummaryView: View {
                 .buttonStyle(.plain)
             }
         }
-        .background(Color.black)
+        .background(Color.black.ignoresSafeArea())
     }
 
     private var title: String {

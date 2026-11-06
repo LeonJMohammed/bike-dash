@@ -1,8 +1,8 @@
 #!/bin/bash
 # Builds Bike Dash for the iPhone simulator and screenshots it in demo mode.
 #   sim-shot.sh <name> [app launch arguments...]
-#   sim-shot.sh ride -demo ride            sim-shot.sh music -demo ride -page 1
-#   sim-shot.sh history -demo history -tab history
+#   sim-shot.sh ride -demo ride            sim-shot.sh settings -demo idle -sheet settings
+#   sim-shot.sh history -demo history -sheet history
 # Prints the PNG's path. Works over plain SSH: simulator builds need no keychain.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"

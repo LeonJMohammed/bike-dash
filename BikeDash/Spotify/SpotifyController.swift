@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import os
 import SpotifyiOS
+import SwiftUI
 import UIKit
 
 private let log = Logger(subsystem: "com.jlmoh.bikedash", category: "spotify")
@@ -31,6 +32,8 @@ final class SpotifyController: NSObject {
     private(set) var status: Status = .disconnected
     private(set) var nowPlaying: NowPlaying?
     private(set) var artwork: UIImage?
+    /// The music bar's colour, from the cover.
+    private(set) var artworkTint: Color?
     private(set) var lastError: String?
 
     static let redirectURL = URL(string: "bikedash://spotify-login-callback")!
@@ -108,6 +111,7 @@ final class SpotifyController: NSObject {
         status = isConfigured ? .disconnected : .notConfigured
         nowPlaying = nil
         artwork = nil
+        artworkTint = nil
     }
 
     private var savedToken: String? {
@@ -173,7 +177,9 @@ final class SpotifyController: NSObject {
         let uri = track.uri
         appRemote?.imageAPI?.fetchImage(forItem: track, with: CGSize(width: 600, height: 600), callback: { [weak self] result, _ in
             guard let self, self.artworkURI == uri else { return }
-            self.artwork = result as? UIImage
+            let image = result as? UIImage
+            self.artwork = image
+            self.artworkTint = image.flatMap { ArtworkTint.color(for: $0) }
         })
     }
 
@@ -188,6 +194,9 @@ final class SpotifyController: NSObject {
             canSkipNext: true,
             canSkipPrevious: true
         )
+        let cover = ArtworkTint.demoCover()
+        artwork = cover
+        artworkTint = ArtworkTint.color(for: cover)
     }
 }
 

@@ -56,9 +56,12 @@ public struct RideSession: Sendable {
         public var heartRateTotal: Double
         public var heartRateSamples: Int
         public var maxHeartRate: Int
+        /// Optional so rides saved before ascent existed still load.
+        public var ascent: Double?
     }
 
-    public let settings: Settings
+    /// Can change mid-ride (the auto-pause switch in Settings).
+    public var settings: Settings
     public private(set) var state: State = .idle
     public private(set) var startedAt: Date?
     public private(set) var finishedAt: Date?
@@ -67,8 +70,11 @@ public struct RideSession: Sendable {
     /// Fastest smoothed speed while riding, m/s.
     public private(set) var maxSpeed: Double = 0
     public private(set) var maxHeartRate = 0
+    /// Metres climbed while riding.
+    public private(set) var ascent: Double = 0
 
     private var movingBefore: TimeInterval = 0
+    private var altitude = AscentCounter()
     private var ridingSince: Date?
     private var heartRateTotal: Double = 0
     private var heartRateSamples = 0
@@ -100,6 +106,7 @@ public struct RideSession: Sendable {
         heartRateTotal = snapshot.heartRateTotal
         heartRateSamples = snapshot.heartRateSamples
         maxHeartRate = snapshot.maxHeartRate
+        ascent = snapshot.ascent ?? 0
     }
 
     public var snapshot: Snapshot {
@@ -113,7 +120,8 @@ public struct RideSession: Sendable {
             maxSpeed: maxSpeed,
             heartRateTotal: heartRateTotal,
             heartRateSamples: heartRateSamples,
-            maxHeartRate: maxHeartRate
+            maxHeartRate: maxHeartRate,
+            ascent: ascent
         )
     }
 
@@ -182,6 +190,20 @@ public struct RideSession: Sendable {
         }
     }
 
+    /// One barometer reading (relative altitude, metres). Climbing counts only while riding.
+    public mutating func addAltitude(_ metres: Double) {
+        let before = altitude.ascent
+        altitude.add(metres)
+        if state == .riding {
+            ascent += altitude.ascent - before
+        }
+    }
+
+    /// Call when the altimeter (re)starts: its readings start again from 0.
+    public mutating func resetAltitudeReference() {
+        altitude.breakSegment()
+    }
+
     /// One heart rate sample (the app sends one a second). Counts only while riding.
     public mutating func addHeartRate(_ bpm: Int) {
         guard state == .riding, bpm > 0 else { return }
@@ -210,6 +232,12 @@ public struct RideSession: Sendable {
     public func averageSpeed(at now: Date) -> Double? {
         let moving = movingTime(at: now)
         return moving > 0 ? distance / moving : nil
+    }
+
+    /// Average pace in seconds per km, once there's some distance.
+    public func averagePace(at now: Date) -> TimeInterval? {
+        guard distance >= 10 else { return nil }
+        return movingTime(at: now) / (distance / 1000)
     }
 
     public var averageHeartRate: Int? {

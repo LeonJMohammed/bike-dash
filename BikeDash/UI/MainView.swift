@@ -65,6 +65,7 @@ struct BottomTabBar: View {
             VStack(spacing: 5) {
                 Image(systemName: symbol)
                     .font(.system(size: 24))
+                    .frame(height: 28)  // icons differ in height; keep the labels level
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
                     .tracking(0.6)

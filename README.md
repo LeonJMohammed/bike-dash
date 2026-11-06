@@ -25,6 +25,7 @@ scripts\pc\mac.ps1             (in the logged-in session, so
 .\scripts\pc\mac.ps1 build -Launch  # same, then opens the app (phone unlocked)
 .\scripts\pc\mac.ps1 test           # BikeDashCore unit tests on the Mac
 .\scripts\pc\mac.ps1 status         # last build result and when the signature expires
+.\scripts\pc\mac.ps1 refresh -Force # renew the 7-day signature now
 ```
 
 Only committed code is built. The Mac's copy updates on every push (`receive.denyCurrentBranch updateInstead`), so never edit files there.
@@ -64,11 +65,24 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 
 ## Mac-only files (never in git)
 - `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, later `SPOTIFY_CLIENT_ID`
-- `~/.config/bike-dash/refresh.env`: `DEVICE_ID`, later `NTFY_TOPIC` and `HC_PING_URL`
+- `~/.config/bike-dash/refresh.env` (mode 600): `DEVICE_ID`, `NTFY_SERVER`, `NTFY_TOPIC`, `HC_PING_URL`
 - `~/.config/bike-dash/state.json`: when the installed build's signature expires
 - Logs: `~/Library/Logs/bike-dash/` (one log per build request, plus `xcodebuild.log`)
 
+## Staying signed (the 7-day limit)
+- **When it runs:** the MacBook's LaunchAgent runs `scripts/refresh.sh` at login and every 3 hours. A run missed while the Mac sleeps happens when it wakes.
+- **What it does:** once less than 2 days are left, it sets Xcode's cached profile aside so Apple issues a fresh 7-day one, then builds and reinstalls over Wi-Fi. A plain rebuild would keep the old expiry. Tested on 5 Nov 2026: a new profile came back, valid 7 days from the renewal.
+- **ntfy alerts** (the system monitor's topic):
+  - "Bike Dash re-signed" when it works.
+  - At most once a day: "needs re-signing" (phone not reachable), "has expired", "re-sign failed" or "didn't extend".
+- **Healthchecks.io:** the "Bike Dash refresh" check is pinged after every run, so days with the MacBook off alert too.
+- **By hand:**
+  - `mac.ps1 refresh` checks now, and `mac.ps1 refresh -Force` renews now.
+  - `mac.ps1 testalert` sends a test alert.
+  - Over SSH, `refresh.sh --dry-run [--pretend-expiry <epoch>] [--device <id>]` shows what it would do.
+  - `scripts/profiles.sh` lists the cached profiles.
+- Profiles that were set aside stay in `~/.config/bike-dash/profile-backup/`. The app's Settings shows "Signed until".
+
 ## Free signing limits
-- A signature lasts 7 days. The re-sign job comes once a test shows whether an early rebuild resets the 7 days.
 - 3 sideloaded apps per phone and 10 App IDs per 7 days: don't add app extensions or test-host targets.
 - No push notifications or iCloud.

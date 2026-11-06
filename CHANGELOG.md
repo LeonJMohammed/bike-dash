@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Re-sign job (2026-11-05): the MacBook renews the free 7-day signature when under 2 days are left, checking at login and every 3 hours. It sets Xcode's cached profile aside so Apple issues a fresh one, then rebuilds and reinstalls over Wi-Fi. Alerts go through ntfy, and Healthchecks.io gets a heartbeat. Tested the same day: a forced renewal got a new profile valid 7 days from then (Thu 12 Nov 20:41 became 22:14), plus a test alert and dry runs of every branch.
+- Code backed up to the private GitHub repo LeonJMohammed/bike-dash.
 - One screen (Leon's tweaks, 2026-11-05): music sits under the numbers in a bar coloured from the album cover, with the cover to the side and play/pause and skip-forward. Start / Pause / Resume / Hold to stop are small pill buttons in a row above it. History and Settings open as sheets from two round buttons, replacing the tab bar. The ride summary is full screen.
 - New layout after Leon's reference screenshot (2026-11-05): a black bike-computer grid (Distance | Time, Speed, Ascent | Heart rate, Avg pace), page dots, a red START OUTDOOR RIDE bar with Watch / GPS / Music tiles (Pause or Resume + Hold to stop during a ride), and History / Computer / Settings tabs.
 - Step 4, Spotify (SDK 5.0.1): a Music page (swipe left) with artwork, title, play/pause and skip, or 15 s jumps for podcasts. Connect opens Spotify, which starts playing and comes back. Within the hour, Bike Dash reconnects by itself.

@@ -1,0 +1,8 @@
+// Shared build settings for Debug and Release.
+// Machine-specific values (team ID, Spotify client ID) live in Secrets.xcconfig,
+// which exists only on the Mac (copy Secrets.example.xcconfig).
+
+// Git commit shown in the app. The build script passes the real one.
+BIKEDASH_COMMIT = dev
+
+#include? "Secrets.xcconfig"

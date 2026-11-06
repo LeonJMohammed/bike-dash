@@ -1,0 +1,3 @@
+# Everything is LF: the Mac runs these files, and CRLF breaks bash scripts.
+* text=auto eol=lf
+*.png binary

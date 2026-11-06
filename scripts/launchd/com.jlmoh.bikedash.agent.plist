@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: install-agents.sh fills in __REPO__ and __HOME__. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.jlmoh.bikedash.agent</string>
+	<key>ProgramArguments</key>
+	<array>
+		<!-- caffeinate keeps the Mac from idling to sleep mid-build. -->
+		<string>/usr/bin/caffeinate</string>
+		<string>-i</string>
+		<string>/bin/bash</string>
+		<string>__REPO__/scripts/agent.sh</string>
+	</array>
+	<key>QueueDirectories</key>
+	<array>
+		<string>__HOME__/.config/bike-dash/queue</string>
+	</array>
+	<key>StandardOutPath</key>
+	<string>__HOME__/Library/Logs/bike-dash/launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/bike-dash/launchd.log</string>
+</dict>
+</plist>

@@ -1,0 +1,15 @@
+# Generated on the Mac by XcodeGen
+/BikeDash.xcodeproj/
+
+# Build output
+/build/
+DerivedData/
+.build/
+.swiftpm/
+
+# Mac-only secrets (see Config/Secrets.example.xcconfig)
+/Config/Secrets.xcconfig
+
+# macOS / Xcode noise
+.DS_Store
+xcuserdata/

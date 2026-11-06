@@ -5,6 +5,7 @@ Bike Dash: drive the Mac build from this PC (Windows PowerShell 5.1 or 7).
   .\scripts\pc\mac.ps1 build -Launch  same, then open the app (phone unlocked)
   .\scripts\pc\mac.ps1 test           run the BikeDashCore unit tests on the Mac
   .\scripts\pc\mac.ps1 status         last build result and signing expiry
+  .\scripts\pc\mac.ps1 check          agent diagnostics: session, signing identities, phone
   .\scripts\pc\mac.ps1 setup          first time: repo on the Mac, XcodeGen, project
 
 Commit first: only committed code reaches the Mac.
@@ -12,7 +13,7 @@ Keep this file ASCII: Windows PowerShell 5.1 reads it as ANSI.
 #>
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('build', 'test', 'status', 'setup')]
+    [ValidateSet('build', 'test', 'status', 'check', 'setup')]
     [string]$Action = 'build',
     [switch]$Launch,
     [int]$TimeoutMinutes = 20
@@ -36,6 +37,22 @@ function Push-ToMac {
     if ($LASTEXITCODE -ne 0) { throw 'git push to the Mac failed.' }
 }
 
+# Drops a request in the Mac's queue folder (the LaunchAgent picks it up inside
+# the logged-in session), waits for the result and prints the request's log.
+function Invoke-AgentRequest([string]$Request) {
+    $id = Get-Date -Format 'yyyyMMdd-HHmmss'
+    Invoke-Mac "printf '%s' '$Request' > ~/.config/bike-dash/queue/$id.req"
+    Write-Host "Request '$Request' ($id) queued on the Mac..."
+    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    $status = ''
+    while ($status -notmatch "^(ok|failed) $id" -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 5
+        $status = (& $Ssh -o BatchMode=yes -o ConnectTimeout=15 $MacHost 'cat ~/.config/bike-dash/status 2>/dev/null') -join ''
+    }
+    & $Ssh -o BatchMode=yes $MacHost "cat ~/Library/Logs/bike-dash/$id.log 2>/dev/null"
+    if ($status -notmatch "^ok $id") { throw "Request $id did not finish OK (status: '$status')" }
+}
+
 switch ($Action) {
     'setup' {
         Invoke-Mac 'git init -q -b main ~/bike-dash 2>/dev/null; git -C ~/bike-dash config receive.denyCurrentBranch updateInstead && mkdir -p ~/.config/bike-dash/queue ~/Library/Logs/bike-dash'
@@ -48,19 +65,11 @@ switch ($Action) {
     }
     'build' {
         Push-ToMac
-        $id = Get-Date -Format 'yyyyMMdd-HHmmss'
-        $request = 'build'
-        if ($Launch) { $request = 'build launch' }
-        Invoke-Mac "printf '%s' '$request' > ~/.config/bike-dash/queue/$id.req"
-        Write-Host "Build $id queued on the Mac..."
-        $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        $status = ''
-        while ($status -notmatch "^(ok|failed) $id" -and (Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds 5
-            $status = (& $Ssh -o BatchMode=yes -o ConnectTimeout=15 $MacHost 'cat ~/.config/bike-dash/status 2>/dev/null') -join ''
-        }
-        & $Ssh -o BatchMode=yes $MacHost "cat ~/Library/Logs/bike-dash/$id.log 2>/dev/null"
-        if ($status -notmatch "^ok $id") { throw "Build $id did not finish OK (status: '$status')" }
+        if ($Launch) { Invoke-AgentRequest 'build launch' } else { Invoke-AgentRequest 'build' }
+    }
+    'check' {
+        Push-ToMac
+        Invoke-AgentRequest 'check'
     }
     'test' {
         Push-ToMac

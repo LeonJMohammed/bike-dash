@@ -43,14 +43,16 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 6. Optional: install Tailscale and sign in, so the PC can reach the Mac by name anywhere.
 
 ### 2. From the PC
-Add a `mac` host to `~/.ssh/config` (user name + Tailscale name or LAN address), then run `.\scripts\pc\mac.ps1 setup`. It creates `~/bike-dash` on the Mac, installs XcodeGen and generates the project. Put the team ID in `~/bike-dash/Config/Secrets.xcconfig` (copy `Secrets.example.xcconfig`).
+1. Add a `mac` host to `~/.ssh/config` (user name + Tailscale name or LAN address).
+2. `.\scripts\pc\mac.ps1 setup` creates `~/bike-dash` on the Mac, installs XcodeGen and generates the project.
+3. Put the team ID in `~/bike-dash/Config/Secrets.xcconfig` (copy `Secrets.example.xcconfig`).
+4. Load the LaunchAgent with `ssh mac 'bash ~/bike-dash/scripts/install-agents.sh'` (this works over SSH), then run `.\scripts\pc\mac.ps1 check`.
 
 ### 3. On the Mac, once, with the iPhone plugged in
 1. Unlock the iPhone and tap **Trust**.
 2. Open `~/bike-dash/BikeDash.xcodeproj`, pick the iPhone at the top, and press Run. If a keychain prompt asks about `codesign`, type the Mac password and click **Always Allow**.
 3. On the iPhone: Settings > Privacy & Security > **Developer Mode** on (it restarts). Then Settings > General > VPN & Device Management > trust the developer app.
-4. In Terminal: `~/bike-dash/scripts/install-agents.sh`
-5. From the PC: put the phone's identifier (`xcrun devicectl list devices`) in `~/.config/bike-dash/refresh.env` as `DEVICE_ID=...`, then `.\scripts\pc\mac.ps1 build -Launch` with the phone unplugged.
+4. From the PC: put the phone's identifier (`xcrun devicectl list devices`) in `~/.config/bike-dash/refresh.env` as `DEVICE_ID=...`, then `.\scripts\pc\mac.ps1 build -Launch` with the phone unplugged.
 
 ## Mac-only files (never in git)
 - `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, later `SPOTIFY_CLIENT_ID`

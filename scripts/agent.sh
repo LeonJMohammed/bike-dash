@@ -17,6 +17,7 @@ for req in "$QUEUE_DIR"/*.req; do
   case "$action" in
     "build") /bin/bash "$REPO/scripts/build-install.sh" > "$out" 2>&1 ;;
     "build launch") /bin/bash "$REPO/scripts/build-install.sh" --launch > "$out" 2>&1 ;;
+    "check") /bin/bash "$REPO/scripts/check.sh" > "$out" 2>&1 ;;
     *) echo "Unknown request: $action" > "$out"; false ;;
   esac
   rc=$?

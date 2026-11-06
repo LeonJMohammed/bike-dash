@@ -16,7 +16,8 @@ final class RideHistory {
     }
 
     func add(_ record: RideRecord) {
-        rides.insert(record, at: 0)
+        rides.append(record)
+        rides.sort { $0.startedAt > $1.startedAt }
         save()
     }
 

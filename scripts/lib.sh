@@ -54,6 +54,71 @@ profile_expiry_epoch() {
   date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$iso" '+%s'
 }
 
+# Expiry (epoch seconds) of the build on the phone, from state.json; empty if unknown.
+state_expiry() {
+  plutil -extract expiresAt raw -o - "$STATE_FILE" 2>/dev/null
+}
+
+# "Thu 12 Nov 20:41" from epoch seconds.
+when() {
+  date -r "$1" '+%a %d %b %H:%M'
+}
+
+# Runs a command, killing it after the given number of seconds.
+with_timeout() {
+  perl -e 'alarm shift; exec @ARGV' "$@"
+}
+
+# ntfy alert to the phone (the same topic as the PC's system monitor).
+notify() {  # title message [priority]
+  if [ -z "${NTFY_TOPIC:-}" ]; then
+    log "ntfy: NTFY_TOPIC not set; would have sent: $1"
+    return 0
+  fi
+  curl -fsS -m 20 --retry 2 \
+    -H "Title: $1" -H "Priority: ${3:-default}" -H "Tags: bike" \
+    -d "$2" "${NTFY_SERVER:-https://ntfy.sh}/$NTFY_TOPIC" > /dev/null \
+    || log "ntfy: send failed ($1)"
+}
+
+# Healthchecks.io heartbeat, so days without a run (MacBook off) alert too.
+hc_ping() {  # [/fail]
+  [ -n "${HC_PING_URL:-}" ] || return 0
+  curl -fsS -m 10 --retry 3 "$HC_PING_URL${1:-}" > /dev/null || log "healthchecks: ping failed"
+}
+
+# Paths of Xcode's cached signing profiles for Bike Dash, one per line.
+cached_profiles() {
+  local dir file
+  printf '%s\n' "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+                "$HOME/Library/MobileDevice/Provisioning Profiles" |
+  while IFS= read -r dir; do
+    [ -d "$dir" ] || continue
+    for file in "$dir"/*.mobileprovision; do
+      [ -e "$file" ] || continue
+      if security cms -D -i "$file" 2>/dev/null | grep -qF ".$BUNDLE_ID</string>"; then
+        printf '%s\n' "$file"
+      fi
+    done
+  done
+}
+
+# One line about a profile: created, expires, team, UUID.
+describe_profile() {
+  local plist
+  plist="$(mktemp)"
+  if ! security cms -D -i "$1" > "$plist" 2>/dev/null; then
+    rm -f "$plist"
+    return 1
+  fi
+  printf 'created %s, expires %s, team %s, uuid %s\n' \
+    "$(plutil -extract CreationDate raw -o - "$plist")" \
+    "$(plutil -extract ExpirationDate raw -o - "$plist")" \
+    "$(plutil -extract TeamIdentifier.0 raw -o - "$plist")" \
+    "$(plutil -extract UUID raw -o - "$plist")"
+  rm -f "$plist"
+}
+
 # Records what is on the phone now: profile expiry (epoch seconds) and commit.
 write_state() {
   cat > "$STATE_FILE" <<EOF

@@ -6,6 +6,9 @@ Bike Dash: drive the Mac build from this PC (Windows PowerShell 5.1 or 7).
   .\scripts\pc\mac.ps1 test           run the BikeDashCore unit tests on the Mac
   .\scripts\pc\mac.ps1 status         last build result and signing expiry
   .\scripts\pc\mac.ps1 check          agent diagnostics: session, signing identities, phone
+  .\scripts\pc\mac.ps1 refresh        the re-sign check now (renews if under 2 days left)
+  .\scripts\pc\mac.ps1 refresh -Force renew the signature now, whatever is left
+  .\scripts\pc\mac.ps1 testalert      send a TEST ntfy alert from the Mac
   .\scripts\pc\mac.ps1 setup          first time: repo on the Mac, XcodeGen, project
 
 Commit first: only committed code reaches the Mac.
@@ -13,9 +16,10 @@ Keep this file ASCII: Windows PowerShell 5.1 reads it as ANSI.
 #>
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('build', 'test', 'status', 'check', 'setup')]
+    [ValidateSet('build', 'test', 'status', 'check', 'refresh', 'testalert', 'setup')]
     [string]$Action = 'build',
     [switch]$Launch,
+    [switch]$Force,
     [int]$TimeoutMinutes = 20
 )
 
@@ -70,6 +74,13 @@ switch ($Action) {
     'check' {
         Push-ToMac
         Invoke-AgentRequest 'check'
+    }
+    'refresh' {
+        Push-ToMac
+        if ($Force) { Invoke-AgentRequest 'refresh force' } else { Invoke-AgentRequest 'refresh' }
+    }
+    'testalert' {
+        Invoke-AgentRequest 'test-alert'
     }
     'test' {
         Push-ToMac

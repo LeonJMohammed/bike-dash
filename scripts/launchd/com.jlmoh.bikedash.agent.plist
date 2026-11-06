@@ -13,9 +13,25 @@
 		<string>/bin/bash</string>
 		<string>__REPO__/scripts/agent.sh</string>
 	</array>
+	<!-- Requests from the PC. -->
 	<key>QueueDirectories</key>
 	<array>
 		<string>__HOME__/.config/bike-dash/queue</string>
+	</array>
+	<!-- The re-sign check: at login, then every 3 hours. A run missed while
+	     the Mac sleeps happens when it wakes. -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>17</integer></dict>
+		<dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>17</integer></dict>
 	</array>
 	<key>StandardOutPath</key>
 	<string>__HOME__/Library/Logs/bike-dash/launchd.log</string>

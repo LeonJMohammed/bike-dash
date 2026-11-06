@@ -6,8 +6,8 @@ import os
 
 private let log = Logger(subsystem: "com.jlmoh.bikedash", category: "location")
 
-/// Phone GPS for speed and distance. Tracks only between start() and stop(),
-/// and keeps going in the background (blue pill) so a ride isn't cut short.
+/// Phone GPS. Hands every fix to `onFix` (the ride decides which to trust) and
+/// keeps going in the background (blue pill) so a ride isn't cut short.
 @MainActor
 @Observable
 final class LocationService: NSObject {
@@ -17,11 +17,12 @@ final class LocationService: NSObject {
 
     private(set) var permission: Permission = .unknown
     private(set) var isTracking = false
-    private(set) var track = GPSTrack()
-    /// Accuracy of the latest fix in metres, including fixes that were dropped.
+    /// Accuracy of the latest fix in metres.
     private(set) var accuracy: Double?
     private(set) var lastFixAt: Date?
-    private(set) var droppedCount = 0
+
+    /// Receives every fix.
+    @ObservationIgnored var onFix: (@MainActor (GPSFix) -> Void)?
 
     private let manager = CLLocationManager()
     @ObservationIgnored private var wantsTracking = false
@@ -50,16 +51,11 @@ final class LocationService: NSObject {
 
     func stop() {
         wantsTracking = false
+        guard isTracking else { return }
         isTracking = false
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
-        track.breakSegment()
         lastFixAt = nil
-    }
-
-    func resetDistance() {
-        track.reset()
-        droppedCount = 0
     }
 
     private func begin() {
@@ -90,18 +86,14 @@ extension LocationService: @preconcurrency CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for location in locations {
             accuracy = location.horizontalAccuracy
-            let fix = GPSFix(
+            lastFixAt = location.timestamp
+            onFix?(GPSFix(
                 time: location.timestamp,
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
                 horizontalAccuracy: location.horizontalAccuracy,
                 speed: location.speed
-            )
-            if track.add(fix) {
-                lastFixAt = location.timestamp
-            } else {
-                droppedCount += 1
-            }
+            ))
         }
     }
 

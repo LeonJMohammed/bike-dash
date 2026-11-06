@@ -1,29 +1,24 @@
 import SwiftUI
-import UIKit
 
 struct RootView: View {
-    let heartRate: HeartRateService
-    let location: LocationService
+    let ride: RideController
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 20) {
-                Spacer(minLength: 0)
-                HeartRatePanel(heartRate: heartRate)
-                Divider().overlay(Color.gray.opacity(0.4))
-                GPSPanel(location: location)
-                Spacer(minLength: 0)
-                Text(AppInfo.summary)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(Color.gray)
+            if ride.session.state == .finished {
+                RideSummaryView(ride: ride)
+            } else {
+                DashboardView(ride: ride)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
         }
-        // Keep the screen on while GPS is tracking (step 3 moves this to the ride).
-        .onChange(of: location.isTracking) { _, tracking in
-            UIApplication.shared.isIdleTimerDisabled = tracking
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            switch phase {
+            case .active: ride.appBecameActive()
+            case .background: ride.appWentToBackground()
+            default: break
+            }
         }
     }
 }

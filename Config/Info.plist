@@ -26,9 +26,12 @@
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bike Dash reads the heart rate your watch broadcasts.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Bike Dash uses GPS for your speed and distance while you ride.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
+		<string>location</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

@@ -1,41 +1,38 @@
 import BikeDashCore
 import SwiftUI
 
-/// Step 1 test screen: the live heart rate from the watch's broadcast.
-struct HeartRateScreen: View {
+/// Live heart rate from the watch's broadcast.
+struct HeartRatePanel: View {
     let heartRate: HeartRateService
 
     var body: some View {
         // Redraw once a second so a stale reading turns into "--".
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let bpm = heartRate.bpm(at: context.date)
-            VStack(spacing: 14) {
-                Text(bpm.map { "\($0)" } ?? "--")
-                    .font(.system(size: 160, weight: .heavy, design: .rounded).monospacedDigit())
-                    .foregroundStyle(bpm == nil ? Color.gray : Color.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                Text("bpm")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(Color.gray)
+            VStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(bpm.map { "\($0)" } ?? "--")
+                        .font(.system(size: 110, weight: .heavy, design: .rounded).monospacedDigit())
+                        .foregroundStyle(bpm == nil ? Color.gray : Color.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    Text("bpm")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.gray)
+                }
                 Label(statusText(bpm: bpm), systemImage: "heart.fill")
                     .font(.headline)
                     .foregroundStyle(bpm == nil ? Color.orange : Color.green)
-                if let name = heartRate.deviceName {
-                    Text(name)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.white)
-                }
-                Text(detailText(at: context.date))
-                    .font(.footnote.monospaced())
-                    .foregroundStyle(Color.gray)
-                if heartRate.deviceName != nil {
-                    Button("Forget watch", role: .destructive) { heartRate.forgetWatch() }
-                        .buttonStyle(.bordered)
-                        .padding(.top, 8)
+                HStack(spacing: 12) {
+                    Text(detailText(at: context.date))
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(Color.gray)
+                    if heartRate.deviceName != nil {
+                        Button("Forget", role: .destructive) { heartRate.forgetWatch() }
+                            .font(.footnote)
+                    }
                 }
             }
-            .padding()
         }
     }
 
@@ -52,9 +49,11 @@ struct HeartRateScreen: View {
     }
 
     private func detailText(at now: Date) -> String {
-        var parts = ["\(heartRate.packetCount) packets"]
+        var parts: [String] = []
+        if let name = heartRate.deviceName { parts.append(name) }
+        parts.append("\(heartRate.packetCount) packets")
         if let at = heartRate.latestAt {
-            parts.append("last \(Int(now.timeIntervalSince(at)))s ago")
+            parts.append("\(Int(now.timeIntervalSince(at)))s ago")
         }
         if heartRate.latest?.sensorContact == HeartRateMeasurement.SensorContact.notDetected {
             parts.append("no skin contact")

@@ -1,19 +1,19 @@
 import SwiftUI
 
 struct RootView: View {
+    let heartRate: HeartRateService
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "bicycle")
-                    .font(.system(size: 72, weight: .bold))
-                    .foregroundStyle(Color.accentColor)
-                Text("Bike Dash")
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(Color.white)
+            VStack {
+                Spacer()
+                HeartRateScreen(heartRate: heartRate)
+                Spacer()
                 Text(AppInfo.summary)
-                    .font(.footnote.monospaced())
+                    .font(.caption2.monospaced())
                     .foregroundStyle(Color.gray)
+                    .padding(.bottom, 8)
             }
         }
     }

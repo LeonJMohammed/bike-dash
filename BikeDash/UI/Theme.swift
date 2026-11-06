@@ -19,7 +19,7 @@ enum Theme {
     static let buttonSubtitle = Font.system(size: 16, weight: .semibold).width(.condensed)
     static let barLabel = Font.system(size: 22, weight: .heavy).width(.condensed)
     static let tileLabel = Font.system(size: 14, weight: .semibold).width(.condensed)
-    static let pillLabel = Font.system(size: 18, weight: .heavy).width(.condensed)
+    static let pillLabel = Font.system(size: 17, weight: .heavy).width(.condensed)
 }
 
 struct HorizontalRule: View {

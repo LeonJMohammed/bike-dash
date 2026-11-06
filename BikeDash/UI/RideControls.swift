@@ -36,13 +36,15 @@ struct PillButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                 Text(title)
                     .font(Theme.pillLabel)
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .frame(height: 48)
             .background(Theme.red, in: Capsule())
             .foregroundStyle(Color.white)
@@ -58,8 +60,8 @@ struct CircleButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 19, weight: .semibold))
-                .frame(width: 48, height: 48)
+                .font(.system(size: 18, weight: .semibold))
+                .frame(width: 44, height: 44)
                 .background(Color(white: 0.16), in: Circle())
                 .foregroundStyle(Color.white)
         }
@@ -74,14 +76,12 @@ struct HoldToStopButton: View {
     @State private var pressing = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "stop.fill")
-                .font(.system(size: 15, weight: .bold))
-            Text("HOLD TO STOP")
-                .font(Theme.pillLabel)
-        }
-        .padding(.horizontal, 18)
-        .frame(height: 48)
+        Text("HOLD TO STOP")
+            .font(Theme.pillLabel)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 14)
+            .frame(height: 48)
         .background {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {

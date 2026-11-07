@@ -75,10 +75,18 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 - **ntfy alerts** (the system monitor's topic):
   - "Bike Dash re-signed" when it works.
   - At most once a day: "needs re-signing" (phone not reachable), "has expired", "re-sign failed" or "didn't extend".
+- **When the MacBook is asleep or off,** it can't re-sign or warn you, so the PC watches too. That's `scripts\pc\resign-watch.ps1`, run every 10 minutes by the task "Bike Dash Re-sign Watch".
+  - Whenever it can reach the MacBook, it copies the expiry from `state.json` into `pc-data\resign-watch.json`. That folder is gitignored and also holds its log.
+  - When a re-sign is due and it hasn't reached the MacBook for 30 minutes, ntfy says "Bike Dash: open the MacBook". That's only between 7 am and 10 pm, at most every 8 hours, high priority in the last 12 hours, and once a day after it has expired.
+  - While the MacBook can be reached it stays quiet, and the alerts above cover the rest.
 - **Healthchecks.io:** the "Bike Dash refresh" check is pinged after every run, so days with the MacBook off alert too.
 - **By hand:**
   - `mac.ps1 refresh` checks now, and `mac.ps1 refresh -Force` renews now.
   - `mac.ps1 testalert` sends a test alert.
+  - `resign-watch.ps1` on the PC:
+    - `-Dry` shows what the watch sees; add `-PretendNow '2026-11-11 08:00'` or `-PretendOffline` to try other cases.
+    - `-Test` sends a test alert, and `-Register` sets up its task.
+    - `-SetExpiry '<date time>'` tells it the expiry while the MacBook can't be reached.
   - Over SSH, `refresh.sh --dry-run [--pretend-expiry <epoch>] [--device <id>]` shows what it would do.
   - `scripts/profiles.sh` lists the cached profiles.
 - Profiles that were set aside stay in `~/.config/bike-dash/profile-backup/`. The app's Settings shows "Signed until".

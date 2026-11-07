@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Re-sign watch on the PC (2026-11-07, Leon's request). The MacBook can't re-sign or send anything while it's asleep or off, so the always-on PC checks every 10 minutes and keeps its own copy of the expiry, read from the MacBook whenever it can reach it. When a re-sign is due and it can't reach the MacBook, ntfy says "Bike Dash: open the MacBook". That's only between 7 am and 10 pm, at most every 8 hours, high priority in the last 12 hours, and daily after expiry.
+- First ride (2026-11-07): it went well. The Garmin comparison waits for the next ride, because the watch was started late.
 - Re-sign job (2026-11-05): the MacBook renews the free 7-day signature when under 2 days are left, checking at login and every 3 hours. It sets Xcode's cached profile aside so Apple issues a fresh one, then rebuilds and reinstalls over Wi-Fi. Alerts go through ntfy, and Healthchecks.io gets a heartbeat. Tested the same day: a forced renewal got a new profile valid 7 days from then (Thu 12 Nov 20:41 became 22:14), plus a test alert and dry runs of every branch.
 - Code backed up to the private GitHub repo LeonJMohammed/bike-dash.
 - One screen (Leon's tweaks, 2026-11-05): music sits under the numbers in a bar coloured from the album cover, with the cover to the side and play/pause and skip-forward. Start / Pause / Resume / Hold to stop are small pill buttons in a row above it. History and Settings open as sheets from two round buttons, replacing the tab bar. The ride summary is full screen.

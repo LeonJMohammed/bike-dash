@@ -10,6 +10,9 @@ DerivedData/
 # Mac-only secrets (see Config/Secrets.example.xcconfig)
 /Config/Secrets.xcconfig
 
+# PC-only: the re-sign watch's state and log (scripts/pc/resign-watch.ps1)
+/pc-data/
+
 # macOS / Xcode noise
 .DS_Store
 xcuserdata/

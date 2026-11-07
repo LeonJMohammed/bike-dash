@@ -90,7 +90,7 @@ function Send-Ntfy([string]$Title, [string]$Message, [string]$Priority) {
         -Body ([Text.Encoding]::UTF8.GetBytes($Message)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 | Out-Null
 }
 
-$StateKeys = 'expiresAt', 'expires', 'source', 'readAt', 'macSeenAt', 'macReachable', 'alertedExpiry', 'lastAlertAt', 'lastRun'
+$StateKeys = 'expiresAt', 'expires', 'source', 'readAt', 'macSeenAt', 'macReachable', 'alertedExpiry', 'alertKind', 'lastAlertAt', 'lastRun'
 
 function Read-State {
     $state = @{}
@@ -166,17 +166,21 @@ function Get-Alert($State, [long]$Now, [bool]$Reachable) {
     if ($hour -lt $DayStartHour -or $hour -ge $DayEndHour) {
         return @{ Send = $false; Why = "$status and the MacBook can't be reached, but it's night: waiting until $($DayStartHour):00." }
     }
+    # The repeat gap only counts alerts of the same kind, so the first "has expired" comes at
+    # the next daytime run rather than a day after the last "open the MacBook".
+    $kind = if ($expired) { 'expired' } else { 'due' }
     $repeat = if ($expired) { $ExpiredRepeatHours } else { $RepeatHours }
-    if ($State.lastAlertAt -and [long]$State.alertedExpiry -eq $expiry -and ($Now - [long]$State.lastAlertAt) -lt $repeat * 3600) {
+    if ($State.lastAlertAt -and [long]$State.alertedExpiry -eq $expiry -and $State.alertKind -eq $kind -and
+        ($Now - [long]$State.lastAlertAt) -lt $repeat * 3600) {
         return @{ Send = $false; Why = "$status and the MacBook can't be reached; told at $(Format-When $State.lastAlertAt), again after $repeat h." }
     }
     if ($expired) {
-        return @{ Send = $true; Why = "$status, and the MacBook can't be reached."; Priority = 'high'
+        return @{ Send = $true; Kind = $kind; Why = "$status, and the MacBook can't be reached."; Priority = 'high'
                   Title = 'Bike Dash has expired'
                   Body = "Bike Dash won't open until it's re-signed, and the MacBook seems to be asleep or off. $Fix" }
     }
     $priority = if ($left -lt $UrgentHours * 3600) { 'high' } else { 'default' }
-    return @{ Send = $true; Why = "Due (expires $when), and the MacBook can't be reached."; Priority = $priority
+    return @{ Send = $true; Kind = $kind; Why = "$status, and the MacBook can't be reached."; Priority = $priority
               Title = 'Bike Dash: open the MacBook'; Body = (Get-DueMessage $expiry $Now) }
 }
 
@@ -249,6 +253,7 @@ try {
         Send-Ntfy $alert.Title $alert.Body $alert.Priority
         $state.lastAlertAt = $now
         $state.alertedExpiry = [long]$state.expiresAt
+        $state.alertKind = $alert.Kind
         Write-Log "Alert ($($alert.Priority)): $($alert.Title) | $($alert.Body)"
     }
     $state.lastRun = $now

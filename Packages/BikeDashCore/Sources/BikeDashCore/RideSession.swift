@@ -42,6 +42,19 @@ public struct RideSession: Sendable {
             self.resumeAbove = resumeAbove
             self.resumeAfter = resumeAfter
         }
+
+        /// GPS speed wobbles, so it waits a few seconds before pausing or resuming.
+        public static func gps(autoPause: Bool) -> Settings {
+            Settings(autoPause: autoPause)
+        }
+
+        /// The wheel sensor's speed is exact and reads 0 once the wheel has
+        /// stopped (no revolution for 3 s). So it pauses as soon as it reads 0,
+        /// counted from the last revolution, and resumes as soon as the wheel
+        /// gives a speed again.
+        public static func wheelSensor(autoPause: Bool) -> Settings {
+            Settings(autoPause: autoPause, pauseBelow: 0.5, pauseAfter: 0, resumeAbove: 0.5, resumeAfter: 0)
+        }
     }
 
     /// What's saved to disk, so a ride survives the app being closed.
@@ -171,23 +184,34 @@ public struct RideSession: Sendable {
 
     // MARK: - Inputs
 
-    /// Every GPS fix, ridden or not: it also keeps the speed fresh before the
-    /// start and drives auto-pause and auto-resume.
+    /// Every GPS fix, ridden or not, while GPS is the speed source: it also
+    /// keeps the speed fresh before the start and drives auto-pause and auto-resume.
     public mutating func add(_ fix: GPSFix) {
         let before = track.distance
         guard track.add(fix) else { return }
-        let delta = track.distance - before
-        let speed = track.speed(at: fix.time)
+        addMovement(distance: track.distance - before, speed: track.speed(at: fix.time), at: fix.time)
+    }
+
+    /// Distance and speed from whichever source is in use (the wheel sensor
+    /// sends one per packet and one a second). `stillSince` is when the wheel
+    /// last turned: once the speed reads 0, an auto-pause counts from then.
+    public mutating func addMovement(distance delta: Double, speed: Double?, at time: Date, stillSince: Date? = nil) {
         switch state {
         case .riding:
             distance += delta
             if let speed { maxSpeed = max(maxSpeed, speed) }
-            checkAutoPause(speed: speed, at: fix.time)
+            checkAutoPause(speed: speed, at: time, stillSince: stillSince)
         case .paused(.auto):
-            checkAutoResume(speed: speed, delta: delta, at: fix.time)
+            checkAutoResume(speed: speed, delta: delta, at: time)
         default:
             break
         }
+    }
+
+    /// GPS takes over from the wheel sensor (or the other way round): the next
+    /// fix starts a new GPS segment, so the gap isn't counted twice.
+    public mutating func breakGPSTrack() {
+        track.breakSegment()
     }
 
     /// One barometer reading (relative altitude, metres). Climbing counts only while riding.
@@ -223,7 +247,7 @@ public struct RideSession: Sendable {
         return max(0, (finishedAt ?? now).timeIntervalSince(startedAt))
     }
 
-    /// Smoothed current speed in m/s, or nil without a fresh fix.
+    /// Smoothed GPS speed in m/s, or nil without a fresh fix.
     public func speed(at now: Date) -> Double? {
         track.speed(at: now)
     }
@@ -246,13 +270,13 @@ public struct RideSession: Sendable {
 
     // MARK: - Private
 
-    private mutating func checkAutoPause(speed: Double?, at time: Date) {
+    private mutating func checkAutoPause(speed: Double?, at time: Date, stillSince: Date?) {
         guard settings.autoPause, let speed else { return }
         guard speed < settings.pauseBelow else {
             slowSince = nil
             return
         }
-        let since = slowSince ?? time
+        let since = slowSince ?? min(stillSince ?? time, time)
         slowSince = since
         if time.timeIntervalSince(since) >= settings.pauseAfter {
             // Pause from when it first went slow, so the wait isn't moving time.

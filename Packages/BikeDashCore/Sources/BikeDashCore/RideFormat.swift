@@ -47,4 +47,9 @@ public enum RideFormat {
     public static func distance(_ metres: Double) -> String {
         String(format: "%.2f", metres / 1000)
     }
+
+    /// Whole revolutions per minute, "88".
+    public static func cadence(_ rpm: Double) -> String {
+        String(Int(rpm.rounded()))
+    }
 }

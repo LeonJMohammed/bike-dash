@@ -144,6 +144,57 @@ final class RideSessionTests: XCTestCase {
         XCTAssertEqual(ride.distance, 0)
         XCTAssertEqual(ride.movingTime(at: at(20)), 0)
     }
+
+    // MARK: - Wheel sensor
+
+    func testWheelSensorPausesFromTheLastRevolutionAndResumesWhenTheWheelTurns() {
+        var ride = RideSession(settings: .wheelSensor(autoPause: true))
+        ride.start(at: at(0))
+        for s in 1...60 { ride.addMovement(distance: 5, speed: 5, at: at(Double(s))) }  // 300 m
+        // The wheel last turned at 60; its speed reads 0 three seconds later.
+        ride.addMovement(distance: 0, speed: 5, at: at(62), stillSince: at(60))
+        XCTAssertEqual(ride.state, .riding)
+        ride.addMovement(distance: 0, speed: 0, at: at(64), stillSince: at(60))
+        XCTAssertEqual(ride.state, .paused(.auto))
+        XCTAssertEqual(ride.movingTime(at: at(90)), 60, accuracy: 0.001)
+        // Off again at 90: the first revolution gives no speed yet, the second does.
+        ride.addMovement(distance: 2.1, speed: 0, at: at(90), stillSince: at(90))
+        XCTAssertEqual(ride.state, .paused(.auto))
+        ride.addMovement(distance: 2.1, speed: 2.1, at: at(91))
+        XCTAssertEqual(ride.state, .riding)
+        XCTAssertEqual(ride.distance, 302.1, accuracy: 0.001)
+        XCTAssertEqual(ride.movingTime(at: at(100)), 69, accuracy: 0.001)
+    }
+
+    func testWheelSensorDistanceCountsOnlyWhileRiding() {
+        var ride = RideSession(settings: .wheelSensor(autoPause: false))
+        ride.addMovement(distance: 100, speed: 5, at: at(0))  // before the start
+        ride.start(at: at(1))
+        ride.addMovement(distance: 50, speed: 8, at: at(10))
+        ride.pause(at: at(10))
+        ride.addMovement(distance: 30, speed: 3, at: at(20))  // walking the bike, paused
+        XCTAssertEqual(ride.distance, 50, accuracy: 0.001)
+        XCTAssertEqual(ride.maxSpeed, 8, accuracy: 0.001)
+    }
+
+    func testStartingWhileStandingStillPausesWithNoMovingTime() {
+        var ride = RideSession(settings: .wheelSensor(autoPause: true))
+        ride.start(at: at(100))
+        // The wheel last turned long before the start.
+        ride.addMovement(distance: 0, speed: 0, at: at(101), stillSince: at(40))
+        XCTAssertEqual(ride.state, .paused(.auto))
+        XCTAssertEqual(ride.movingTime(at: at(120)), 0, accuracy: 0.001)
+    }
+
+    func testBreakingTheGPSTrackSkipsTheStretchTheSensorCovered() {
+        var ride = RideSession()
+        ride.start(at: at(0))
+        for s in 0...10 { ride.add(fix(Double(s), north: Double(s) * 5, speed: 5)) }  // 50 m by GPS
+        ride.breakGPSTrack()
+        ride.addMovement(distance: 100, speed: 5, at: at(30))  // 100 m by the sensor
+        for s in 31...40 { ride.add(fix(Double(s), north: 500 + Double(s - 31) * 5, speed: 5)) }  // 45 m by GPS
+        XCTAssertEqual(ride.distance, 195, accuracy: 1)
+    }
 }
 
 final class RideFormatTests: XCTestCase {
@@ -159,5 +210,10 @@ final class RideFormatTests: XCTestCase {
         XCTAssertEqual(RideFormat.speed(5), "18.0")
         XCTAssertEqual(RideFormat.distance(1234), "1.23")
         XCTAssertEqual(RideFormat.distance(1500), "1.50")
+    }
+
+    func testCadence() {
+        XCTAssertEqual(RideFormat.cadence(87.6), "88")
+        XCTAssertEqual(RideFormat.cadence(0), "0")
     }
 }

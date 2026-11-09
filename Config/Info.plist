@@ -25,9 +25,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Bike Dash reads the heart rate your watch broadcasts.</string>
+	<string>Bike Dash reads the heart rate your watch broadcasts, and speed and cadence from your bike sensors.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Bike Dash uses GPS for your speed and distance while you ride.</string>
+	<string>Bike Dash uses GPS for speed and distance when you choose GPS, or when the speed sensor drops out during a ride.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Bike Dash uses the barometer to count how much you climb.</string>
 	<key>LSApplicationQueriesSchemes</key>

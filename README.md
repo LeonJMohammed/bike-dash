@@ -1,6 +1,6 @@
 # Bike Dash
 
-A personal iPhone app for the handlebars. It shows heart rate from the Forerunner 165's Bluetooth broadcast, GPS speed, distance and moving time, and what Spotify is playing. The watch records the official Bike activity; this app is only the display.
+A personal iPhone app for the handlebars. It shows heart rate from the Forerunner 165's Bluetooth broadcast, speed, distance and cadence from two Bluetooth bike sensors (GPS only as a fallback), moving time, and what Spotify is playing. The watch records the official Bike activity and the GPS route; this app is only the display.
 
 It isn't on the App Store. It's signed with a free Apple ID (an Xcode personal team), so each signature lasts 7 days and the Mac re-signs it.
 
@@ -14,7 +14,7 @@ scripts\pc\mac.ps1             (in the logged-in session, so
 ```
 
 - `project.yml` defines the Xcode project ([XcodeGen](https://github.com/yonaskolb/XcodeGen)). The Mac generates `BikeDash.xcodeproj` before every build; it's never committed.
-- `Packages/BikeDashCore` holds the logic that doesn't need a phone: heart rate packets now, ride maths later. Its tests run with `swift test` on the Mac.
+- `Packages/BikeDashCore` holds the logic that doesn't need a phone: heart rate and speed/cadence sensor packets, the ride maths and the GPS fallback rule. Its tests run with `swift test` on the Mac.
 - `BikeDash/` is the SwiftUI app. `Config/Info.plist` is its Info.plist.
 - `scripts/` runs on the Mac; `scripts/pc/` runs on the PC.
 
@@ -55,13 +55,23 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 3. On the iPhone: Settings > Privacy & Security > **Developer Mode** on (it restarts). Then Settings > General > VPN & Device Management > trust the developer app.
 4. From the PC: put the phone's identifier (`xcrun devicectl list devices`) in `~/.config/bike-dash/refresh.env` as `DEVICE_ID=...`, then `.\scripts\pc\mac.ps1 build -Launch` with the phone unplugged.
 
+## Speed and cadence sensors
+- Two Magene S3+ sensors, one on the front hub set to speed and one on the left crank set to cadence. They send ANT+ to the watch and standard Bluetooth (Cycling Speed and Cadence, 0x1816) to the phone at the same time.
+- **Pairing:** Settings > Pair sensors scans, connects to what it finds and shows what each one sends, read from the data (wheel or crank) rather than the name. "Use for speed" or "Use for cadence" saves it. Paired sensors reconnect by themselves whenever they wake up (spin the wheel or turn the crank).
+- **One connection each:** a sensor takes one Bluetooth connection at a time, so other apps that use it (such as Cadence) must be closed. The watch uses ANT+ and isn't affected.
+- **The maths:** speed is wheel turns × circumference ÷ time between the sensor's own event times; cadence is crank turns ÷ time × 60. Repeated packets are ignored, the 64 s event clock and the turn counts wrap correctly, and the speed or cadence reads 0 after 3 s without a new turn. The first turn after a stop or a reconnect counts for distance but gives no speed.
+- **Settings:** Speed from Sensor (default) or GPS, and the wheel circumference in mm (2105, for 700x25, by default).
+- **GPS fallback:** with Sensor chosen, GPS stays off. During a ride it takes over once the speed sensor has been disconnected for 10 s (GPS FALLBACK at the top), and hands back once the sensor has been connected again for 5 s. While auto-paused it only starts if the cadence sensor shows pedalling, so a long stop with the sensors asleep doesn't switch it on. If the phone is locked or Bike Dash is in the background when the sensor drops, iOS may hold GPS back until Bike Dash is open again.
+- **Auto-pause with the sensor:** it pauses as soon as the wheel stops (no turn for 3 s), counted from its last turn, and resumes as soon as it turns again.
+- **Sensor data** (Settings) shows the raw values: packets, flags, turn counts, event times, the last interval and what they work out to.
+
 ## Spotify
 - The music bar under the numbers uses the Spotify iOS SDK (App Remote) through the Spotify app. Spotify has to be playing to connect, so **Connect** opens Spotify, starts the music and comes back with a token that's good for an hour.
 - The Spotify developer app needs the redirect URI `bikedash://spotify-login-callback` and the iOS bundle ID `com.jlmoh.bikedash`. Development mode requires the owner to have Premium and allows up to 5 users.
 - The Client ID goes in `Config/Secrets.xcconfig` on the Mac as `SPOTIFY_CLIENT_ID`.
 
 ## Simulator screenshots
-`ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|paused|finished|idle|history [-sheet history|settings]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware.
+`ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|fallback|paused|finished|idle|history [-sheet history|settings] [-page sensors|sensorData]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware; the ride scenes send the packets the sensors would, so the sensor maths runs as on the bike, and `fallback` has the speed sensor switched off.
 
 ## Mac-only files (never in git)
 - `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, later `SPOTIFY_CLIENT_ID`

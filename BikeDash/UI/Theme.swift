@@ -8,6 +8,7 @@ enum Theme {
     static let dim = Color(white: 0.55)
     static let warning = Color.orange
     static let paused = Color.yellow
+    static let ok = Color.green
 
     /// Tall bold numbers.
     static func number(_ size: CGFloat) -> Font {

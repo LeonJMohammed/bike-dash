@@ -8,6 +8,8 @@ private let log = Logger(subsystem: "com.jlmoh.bikedash", category: "location")
 
 /// Phone GPS. Hands every fix to `onFix` (the ride decides which to trust) and
 /// keeps going in the background (blue pill) so a ride isn't cut short.
+/// It runs only when the ride asks for it: GPS chosen as the speed source, or
+/// the speed sensor dropping out mid-ride.
 @MainActor
 @Observable
 final class LocationService: NSObject {
@@ -37,12 +39,15 @@ final class LocationService: NSObject {
         permission = Self.mapPermission(manager.authorizationStatus)
     }
 
+    /// Asked to run (it may still be waiting for permission).
+    var isRequested: Bool { wantsTracking }
+
     func start() {
+        wantsTracking = true
         if DemoMode.isOn {
             startDemo()
             return
         }
-        wantsTracking = true
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()  // tracking begins once allowed
@@ -62,8 +67,18 @@ final class LocationService: NSObject {
         lastFixAt = nil
     }
 
+    /// Back in the foreground: reads the permission again, and restarts updates
+    /// that were asked for from the background, where iOS may not begin them.
+    func ensureRunning() {
+        permission = Self.mapPermission(manager.authorizationStatus)
+        guard wantsTracking, permission == .allowed, !DemoMode.isOn else { return }
+        if let lastFixAt, Date().timeIntervalSince(lastFixAt) < 10 { return }
+        isTracking = false
+        begin()
+    }
+
     /// Demo mode (simulator screenshots): GPS looks on; fixes come from DemoMode.
-    func startDemo() {
+    private func startDemo() {
         isTracking = true
         accuracy = 4
         lastFixAt = Date()

@@ -1,12 +1,22 @@
+import BikeDashCore
 import SwiftUI
 
 struct SettingsView: View {
+    enum Page: String, Hashable {
+        case sensors, sensorData
+    }
+
     let ride: RideController
     let spotify: SpotifyController
     @Environment(\.dismiss) private var dismiss
+    /// `-page sensors|sensorData` opens one at launch (simulator screenshots).
+    @State private var path: [Page] = UserDefaults.standard.string(forKey: "page")
+        .flatMap(Page.init(rawValue:)).map { [$0] } ?? []
+    @State private var wheelText = ""
+    @FocusState private var editingWheel: Bool
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section {
                     Toggle("Auto-pause", isOn: Binding(
@@ -16,7 +26,50 @@ struct SettingsView: View {
                 } header: {
                     Text("Ride")
                 } footer: {
-                    Text("Pauses below 3.6 km/h and resumes above 6.5 km/h.")
+                    Text("With the speed sensor it pauses when the wheel stops and resumes when it turns. With GPS it pauses below 3.6 km/h and resumes above 6.5 km/h.")
+                }
+
+                Section {
+                    Picker("Speed from", selection: Binding(
+                        get: { ride.speedPreference },
+                        set: { ride.setSpeedPreference($0) }
+                    )) {
+                        Text("Sensor").tag(SpeedSourcePicker.Preference.sensor)
+                        Text("GPS").tag(SpeedSourcePicker.Preference.gps)
+                    }
+                    LabeledContent("Wheel circumference") {
+                        HStack(spacing: 4) {
+                            TextField("2105", text: $wheelText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($editingWheel)
+                                .frame(width: 64)
+                            Text("mm")
+                                .foregroundStyle(Theme.dim)
+                        }
+                    }
+                    Menu("Common wheel sizes") {
+                        ForEach(CyclingSensorService.commonWheels) { wheel in
+                            Button("\(wheel.name) · \(wheel.millimetres) mm") {
+                                setWheel(wheel.millimetres)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Speed and distance")
+                } footer: {
+                    Text("With Sensor, GPS stays off. It only takes over if the speed sensor is disconnected for 10 s during a ride, and GPS FALLBACK shows at the top. For exact distance, measure one turn of the front wheel in mm.")
+                }
+
+                Section {
+                    sensorRow(.speed)
+                    sensorRow(.cadence)
+                    NavigationLink("Pair sensors", value: Page.sensors)
+                    NavigationLink("Sensor data", value: Page.sensorData)
+                } header: {
+                    Text("Sensors")
+                } footer: {
+                    Text("Paired sensors connect by themselves when they wake up: spin the wheel or turn the crank.")
                 }
 
                 Section("Heart rate") {
@@ -55,12 +108,45 @@ struct SettingsView: View {
             .background(Color.black)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Page.self) { page in
+                switch page {
+                case .sensors: SensorsView(sensors: ride.sensors)
+                case .sensorData: SensorDataView(ride: ride)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { editingWheel = false }
+                }
+            }
+            .onAppear { wheelText = String(ride.sensors.circumference) }
+            .onChange(of: editingWheel) { _, editing in
+                if !editing { setWheel(Int(wheelText) ?? 0) }
             }
         }
+    }
+
+    private func sensorRow(_ role: CyclingSensorService.Role) -> some View {
+        LabeledContent(role.title) {
+            VStack(alignment: .trailing, spacing: 2) {
+                if let name = ride.sensors.paired[role]?.name {
+                    Text(name)
+                }
+                Text(ride.sensors.statusText(role))
+                    .font(.footnote)
+                    .foregroundStyle(ride.sensors.isConnected(role) ? Theme.ok : Theme.dim)
+            }
+        }
+    }
+
+    /// Keeps a size in range (1000 to 3000 mm); anything else puts the old one back.
+    private func setWheel(_ millimetres: Int) {
+        ride.sensors.setCircumference(millimetres)
+        wheelText = String(ride.sensors.circumference)
     }
 
     private var spotifyStatus: String {

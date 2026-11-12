@@ -36,6 +36,9 @@ struct MainView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
+        .onChange(of: ride.rideScreenRequests) {
+            panel = nil
+        }
         .sheet(item: $panel) { panel in
             switch panel {
             case .history: HistoryView(history: history)

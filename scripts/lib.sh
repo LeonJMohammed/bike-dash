@@ -4,6 +4,8 @@
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUNDLE_ID="com.jlmoh.bikedash"
+# A profile's application-identifier for Bike Dash or its widget extension.
+APP_IDS_RE='\.com\.jlmoh\.bikedash(\.widgets)?</string>'
 
 CONFIG_DIR="$HOME/.config/bike-dash"
 QUEUE_DIR="$CONFIG_DIR/queue"        # the PC drops build requests here (LaunchAgent QueueDirectories)
@@ -108,7 +110,8 @@ phone_ready_for_development() {
   return $rc
 }
 
-# Paths of Xcode's cached signing profiles for Bike Dash, one per line.
+# Paths of Xcode's cached signing profiles for Bike Dash and its widget
+# extension, one per line.
 cached_profiles() {
   local dir file
   printf '%s\n' "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
@@ -117,7 +120,7 @@ cached_profiles() {
     [ -d "$dir" ] || continue
     for file in "$dir"/*.mobileprovision; do
       [ -e "$file" ] || continue
-      if security cms -D -i "$file" 2>/dev/null | grep -qF ".$BUNDLE_ID</string>"; then
+      if security cms -D -i "$file" 2>/dev/null | grep -qE "$APP_IDS_RE"; then
         printf '%s\n' "$file"
       fi
     done

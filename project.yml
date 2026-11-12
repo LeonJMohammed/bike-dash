@@ -26,9 +26,12 @@ targets:
     platform: iOS
     sources:
       - path: BikeDash
+      - path: Shared
     dependencies:
       - package: BikeDashCore
       - package: SpotifyiOS
+      # The Live Activity's widget extension, embedded in the app.
+      - target: BikeDashWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jlmoh.bikedash
@@ -39,3 +42,22 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     scheme:
       gatherCoverageData: false
+  # The Live Activity (lock screen and Dynamic Island). Its own App ID,
+  # com.jlmoh.bikedash.widgets, signed by the same free team as the app.
+  BikeDashWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BikeDashWidgets
+      - path: Shared
+    dependencies:
+      - package: BikeDashCore
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jlmoh.bikedash.widgets
+        INFOPLIST_FILE: Config/Widgets-Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES

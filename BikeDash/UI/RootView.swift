@@ -10,7 +10,14 @@ struct RootView: View {
         MainView(ride: ride, spotify: spotify, history: history)
             // Any touch brightens a dimmed ride screen.
             .background(WindowTouchHook { ride.wakeScreen() })
-            .onOpenURL { spotify.handle($0) }
+            .onOpenURL { url in
+                // A tap on the Live Activity; everything else is Spotify's sign-in reply.
+                if RideLink.isRide(url) {
+                    ride.showRideScreen()
+                } else {
+                    spotify.handle(url)
+                }
+            }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 switch phase {
                 case .active:

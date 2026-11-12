@@ -43,7 +43,15 @@ fi
 # Our own warnings only (not the Swift packages').
 grep -E ' warning: ' "$buildlog" | grep -v '/SourcePackages/' | sort -u | head -n 20 || true
 
+# The app and its widget extension each have a profile; whichever runs out
+# first is when Bike Dash stops opening.
 expiry="$(profile_expiry_epoch "$APP")"
+for appex in "$APP"/PlugIns/*.appex; do
+  [ -e "$appex" ] || continue
+  if ext="$(profile_expiry_epoch "$appex")" && [ -n "$ext" ] && [ "$ext" -lt "$expiry" ]; then
+    expiry="$ext"
+  fi
+done
 echo "== Signed; the profile expires $(date -r "$expiry" '+%a %d %b %H:%M')"
 
 echo "== Installing on the iPhone"

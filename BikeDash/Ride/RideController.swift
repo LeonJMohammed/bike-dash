@@ -26,6 +26,10 @@ final class RideController {
     let altimeter: AltimeterService
     let history: RideHistory
     let dimmer = ScreenDimmer()
+    let liveActivity = LiveActivityController()
+    /// Bumped when a tap on the Live Activity asks for the ride screen, so any
+    /// open sheet closes.
+    private(set) var rideScreenRequests = 0
     /// The lit heart rate zone (0 below zone 1, up to 5), nil before a reading.
     private(set) var heartRateZone: Int?
 
@@ -105,6 +109,9 @@ final class RideController {
             self?.session.addAltitude(metres)
         }
         restore()
+        if !session.isActive {
+            liveActivity.endAll()
+        }
     }
 
     // MARK: - Readings
@@ -131,18 +138,21 @@ final class RideController {
         reminderShowing = false
         lapsSeen = 0
         dismissLap()
+        liveActivity.start(activityState(at: Date()), startedAt: time)
         save()
     }
 
     func pause() {
         session.pause(at: Date())
         refreshSource(at: Date())
+        updateLiveActivity(at: Date())
         save()
     }
 
     func resume() {
         session.resume(at: Date())
         refreshSource(at: Date())
+        updateLiveActivity(at: Date())
         save()
     }
 
@@ -156,6 +166,7 @@ final class RideController {
         // The final lap goes into the summary, not on screen.
         lapsSeen = session.laps.count
         dismissLap()
+        liveActivity.end(activityState(at: Date()))
         refreshSource(at: Date())
         if let record = session.record() {
             history.add(record)
@@ -247,6 +258,29 @@ final class RideController {
         dimmer.wake(at: Date())
     }
 
+    /// A tap on the Live Activity: the ride screen, with any sheet closed.
+    func showRideScreen() {
+        rideScreenRequests += 1
+    }
+
+    /// The ride's numbers for the Live Activity.
+    private func activityState(at now: Date) -> RideActivityState {
+        RideActivityState(
+            session: session,
+            speed: speed(at: now),
+            heartRate: heartRate.bpm(at: now),
+            cadence: sensors.cadence(at: now),
+            at: now
+        )
+    }
+
+    /// Called often (ticks, sensor packets, fixes, heart rate) so the Live
+    /// Activity keeps up while the phone is locked; the throttle decides.
+    private func updateLiveActivity(at now: Date) {
+        guard session.isActive else { return }
+        liveActivity.update(activityState(at: now), at: now)
+    }
+
     /// Once a second: puts the "Eat / Drink" banner up when it's due (with a
     /// buzz, a chime and a bright screen) and takes it down after 15 s.
     private func updateReminder(at now: Date) {
@@ -284,6 +318,7 @@ final class RideController {
         if heartRateZone != zoneTracker.zone {
             heartRateZone = zoneTracker.zone
         }
+        updateLiveActivity(at: Date())
     }
 
     // MARK: - App lifecycle
@@ -347,12 +382,14 @@ final class RideController {
         guard picker.source != .sensor else { return }
         session.add(fix)
         showNewLaps()
+        updateLiveActivity(at: Date())
     }
 
     /// A sensor packet, a connection change or a tick: picks the source, then
     /// feeds the wheel sensor's distance and speed to the ride if it's in use.
     private func feedSensors(_ update: CyclingSensorService.Update) {
         refreshSource(at: update.at)
+        defer { updateLiveActivity(at: Date()) }
         guard picker.source == .sensor else { return }
         if let stoppedSince = update.wheelStoppedSince {
             // The wheel stood still until this packet. If the ride didn't pause
@@ -422,6 +459,7 @@ final class RideController {
         }
         updateReminder(at: now)
         dimmer.update(at: now, rideActive: session.isActive, appActive: inFront)
+        updateLiveActivity(at: now)
         if now.timeIntervalSince(lastSavedAt) >= 10 {
             save()
         }
@@ -468,6 +506,7 @@ final class RideController {
             startTicker()
             // The countdown isn't saved: a full interval from here.
             restartReminder()
+            liveActivity.resume(activityState(at: Date()), startedAt: session.startedAt ?? Date())
         }
         refreshSource(at: Date())
         // The screen lock is set in appBecameActive(): this runs during launch.

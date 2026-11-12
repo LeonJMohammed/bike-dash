@@ -24,6 +24,8 @@
 	<string>$(BIKEDASH_COMMIT)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bike Dash reads the heart rate your watch broadcasts, and speed and cadence from your bike sensors.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

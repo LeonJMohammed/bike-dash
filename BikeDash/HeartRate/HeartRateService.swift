@@ -24,6 +24,9 @@ final class HeartRateService: NSObject {
     private(set) var latestAt: Date?
     private(set) var packetCount = 0
 
+    /// Every reading, for the heart rate zone.
+    @ObservationIgnored var onReading: (@MainActor (Int) -> Void)?
+
     @ObservationIgnored private var central: CBCentralManager?
     @ObservationIgnored private var watch: CBPeripheral?
     /// Demo mode (simulator screenshots): a fixed reading and no Bluetooth.
@@ -236,5 +239,6 @@ extension HeartRateService: @preconcurrency CBPeripheralDelegate {
         latest = measurement
         latestAt = Date()
         packetCount += 1
+        onReading?(measurement.bpm)
     }
 }

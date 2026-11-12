@@ -13,7 +13,14 @@ struct SettingsView: View {
     @State private var path: [Page] = UserDefaults.standard.string(forKey: "page")
         .flatMap(Page.init(rawValue:)).map { [$0] } ?? []
     @State private var wheelText = ""
-    @FocusState private var editingWheel: Bool
+    /// The number fields share the keyboard's Done button.
+    enum Field: Hashable {
+        case wheel, maxHeartRate
+    }
+
+    @FocusState private var editing: Field?
+    @State private var maxHeartRateText = ""
+    @AppStorage(RideController.maxHeartRateKey) private var maxHeartRate = HeartRateZones.defaultMax
     @AppStorage(Theme.rideThemeKey) private var rideTheme = RideTheme.default.rawValue
     @AppStorage(Theme.albumColourKey) private var albumColour = false
     @AppStorage(ScreenDimmer.enabledKey) private var dimEnabled = true
@@ -76,7 +83,7 @@ struct SettingsView: View {
                             TextField("2105", text: $wheelText)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
-                                .focused($editingWheel)
+                                .focused($editing, equals: .wheel)
                                 .frame(width: 64)
                             Text("mm")
                                 .foregroundStyle(Theme.dim)
@@ -106,7 +113,7 @@ struct SettingsView: View {
                     Text("Paired sensors connect by themselves when they wake up: spin the wheel or turn the crank.")
                 }
 
-                Section("Heart rate") {
+                Section {
                     LabeledContent("Watch", value: ride.heartRate.deviceName ?? "None yet")
                     LabeledContent("Status", value: ride.heartRate.statusText)
                     if ride.heartRate.deviceName != nil {
@@ -114,6 +121,21 @@ struct SettingsView: View {
                             ride.heartRate.forgetWatch()
                         }
                     }
+                    LabeledContent("Max heart rate") {
+                        HStack(spacing: 4) {
+                            TextField("\(HeartRateZones.defaultMax)", text: $maxHeartRateText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($editing, equals: .maxHeartRate)
+                                .frame(width: 52)
+                            Text("bpm")
+                                .foregroundStyle(Theme.dim)
+                        }
+                    }
+                } header: {
+                    Text("Heart rate")
+                } footer: {
+                    Text(zonesFooter)
                 }
 
                 Section {
@@ -154,12 +176,19 @@ struct SettingsView: View {
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done") { editingWheel = false }
+                    Button("Done") { editing = nil }
                 }
             }
-            .onAppear { wheelText = String(ride.sensors.circumference) }
-            .onChange(of: editingWheel) { _, editing in
-                if !editing { setWheel(Int(wheelText) ?? 0) }
+            .onAppear {
+                wheelText = String(ride.sensors.circumference)
+                maxHeartRateText = String(maxHeartRate)
+            }
+            .onChange(of: editing) { previous, _ in
+                switch previous {
+                case .wheel: setWheel(Int(wheelText) ?? 0)
+                case .maxHeartRate: setMaxHeartRate(Int(maxHeartRateText) ?? 0)
+                case nil: break
+                }
             }
             .onChange(of: dimLevel) { _, level in
                 if brightnessBeforePreview != nil { ScreenDimmer.screen?.brightness = CGFloat(level) }
@@ -191,6 +220,20 @@ struct SettingsView: View {
             screen.brightness = before
             brightnessBeforePreview = nil
         }
+    }
+
+    /// Keeps a max heart rate in range (120 to 230); anything else puts the old one back.
+    private func setMaxHeartRate(_ bpm: Int) {
+        if HeartRateZones.maxRange.contains(bpm) { maxHeartRate = bpm }
+        maxHeartRateText = String(maxHeartRate)
+    }
+
+    /// Where each zone starts, for the footer.
+    private var zonesFooter: String {
+        let zones = HeartRateZones(maxHeartRate: maxHeartRate)
+        let starts = (1...HeartRateZones.count).map { String(Int(zones.lowerBound(of: $0).rounded())) }
+        return "Zones start at \(starts.dropLast().joined(separator: ", ")) and \(starts.last ?? "") bpm "
+            + "(50, 60, 70, 80 and 90% of max). The strip along the bottom of the ride screen lights your zone."
     }
 
     /// Keeps a size in range (1000 to 3000 mm); anything else puts the old one back.

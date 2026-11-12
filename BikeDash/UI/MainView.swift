@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// One screen: the numbers, a row of small ride buttons, and Spotify along
-/// the bottom. History and Settings open as sheets from the small buttons.
+/// One screen: the numbers, a row of small ride buttons, Spotify, and the heart
+/// rate zone strip along the very bottom. History and Settings open as sheets
+/// from the small buttons.
 struct MainView: View {
     enum Panel: String, Identifiable {
         case history, settings
@@ -23,6 +24,7 @@ struct MainView: View {
                 showSettings: { panel = .settings }
             )
             NowPlayingPanel(spotify: spotify)
+            HeartRateZoneBar(ride: ride)
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(item: $panel) { panel in

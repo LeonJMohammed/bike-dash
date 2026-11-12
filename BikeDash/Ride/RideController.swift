@@ -25,6 +25,16 @@ final class RideController {
     let altimeter: AltimeterService
     let history: RideHistory
     let dimmer = ScreenDimmer()
+    /// The lit heart rate zone (0 below zone 1, up to 5), nil before a reading.
+    private(set) var heartRateZone: Int?
+
+    static let maxHeartRateKey = "maxHeartRate"
+    /// The zones from the max heart rate in Settings.
+    static var heartRateZones: HeartRateZones {
+        HeartRateZones(maxHeartRate: UserDefaults.standard.object(forKey: maxHeartRateKey) as? Int ?? HeartRateZones.defaultMax)
+    }
+
+    @ObservationIgnored private var zoneTracker = ZoneTracker()
 
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var lastSavedAt = Date.distantPast
@@ -60,6 +70,9 @@ final class RideController {
         }
         sensors.onUpdate = { [weak self] update in
             self?.feedSensors(update)
+        }
+        heartRate.onReading = { [weak self] bpm in
+            self?.gotHeartRate(bpm)
         }
         altimeter.onAltitude = { [weak self] metres in
             self?.session.addAltitude(metres)
@@ -143,6 +156,17 @@ final class RideController {
     /// rate zone change): brighten a dimmed screen, and dim again 10 s later.
     func wakeScreen() {
         dimmer.wake(at: Date())
+    }
+
+    /// Each heart rate reading: a new zone is worth a look.
+    private func gotHeartRate(_ bpm: Int) {
+        guard bpm > 0 else { return }
+        if zoneTracker.update(bpm: bpm, zones: Self.heartRateZones) {
+            wakeScreen()
+        }
+        if heartRateZone != zoneTracker.zone {
+            heartRateZone = zoneTracker.zone
+        }
     }
 
     // MARK: - App lifecycle

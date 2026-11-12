@@ -65,6 +65,10 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 - **Auto-pause with the sensor:** it pauses as soon as the wheel stops (no turn for 3 s), counted from its last turn, and resumes as soon as it turns again.
 - **Sensor data** (Settings) shows the raw values: packets, flags, turn counts, event times, the last interval and what they work out to.
 
+## Ride theme
+- **OLED black** (the default) keeps every pixel off except the ones that mean something: the numbers, the status dots and alerts. Buttons are outlines, and the music bar is black unless "Album colour behind the music" is on. **Standard** is the earlier look, with filled buttons and the album-coloured bar.
+- **Refresh rate:** the ride screen redraws once a second and has no continuous animations, so a ProMotion iPhone drops to its lowest refresh rate by itself. A `CADisplayLink` with a low `preferredFrameRateRange` wasn't added: it can only ask for frames, not cap what other views request, so it would keep the display ticking instead of idling.
+
 ## Spotify
 - The music bar under the numbers uses the Spotify iOS SDK (App Remote) through the Spotify app. Spotify has to be playing to connect, so **Connect** opens Spotify, starts the music and comes back with a token that's good for an hour.
 - The Spotify developer app needs the redirect URI `bikedash://spotify-login-callback` and the iOS bundle ID `com.jlmoh.bikedash`. Development mode requires the owner to have Premium and allows up to 5 users.

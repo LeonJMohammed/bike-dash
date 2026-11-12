@@ -1,3 +1,4 @@
+import BikeDashCore
 import SwiftUI
 
 /// Small ride buttons (Start, or Pause/Resume and Hold to stop) with the
@@ -29,12 +30,15 @@ struct RideControlRow: View {
     }
 }
 
+/// A red pill: filled in the Standard theme, a red outline in OLED black.
 struct PillButton: View {
     let symbol: String
     let title: String
     let action: () -> Void
+    @AppStorage(Theme.rideThemeKey) private var theme = RideTheme.default.rawValue
 
     var body: some View {
+        let outlined = RideTheme(stored: theme).outlinesControls
         Button(action: action) {
             HStack(spacing: 7) {
                 Image(systemName: symbol)
@@ -46,7 +50,13 @@ struct PillButton: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 48)
-            .background(Theme.red, in: Capsule())
+            .background {
+                if outlined {
+                    Capsule().strokeBorder(Theme.red, lineWidth: 2)
+                } else {
+                    Capsule().fill(Theme.red)
+                }
+            }
             .foregroundStyle(Color.white)
         }
         .buttonStyle(.plain)
@@ -56,13 +66,21 @@ struct PillButton: View {
 struct CircleButton: View {
     let symbol: String
     let action: () -> Void
+    @AppStorage(Theme.rideThemeKey) private var theme = RideTheme.default.rawValue
 
     var body: some View {
+        let outlined = RideTheme(stored: theme).outlinesControls
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .semibold))
                 .frame(width: 44, height: 44)
-                .background(Color(white: 0.16), in: Circle())
+                .background {
+                    if outlined {
+                        Circle().strokeBorder(Theme.outline, lineWidth: 1.5)
+                    } else {
+                        Circle().fill(Color(white: 0.16))
+                    }
+                }
                 .foregroundStyle(Color.white)
         }
         .buttonStyle(.plain)
@@ -70,12 +88,14 @@ struct CircleButton: View {
 }
 
 /// Stopping needs a 1-second press, so rain or a bump can't end the ride.
-/// The pill fills red while you hold.
+/// The pill fills red while you hold (from black in the OLED black theme).
 struct HoldToStopButton: View {
     let action: () -> Void
     @State private var pressing = false
+    @AppStorage(Theme.rideThemeKey) private var theme = RideTheme.default.rawValue
 
     var body: some View {
+        let outlined = RideTheme(stored: theme).outlinesControls
         Text("HOLD TO STOP")
             .font(Theme.pillLabel)
             .lineLimit(1)
@@ -85,13 +105,16 @@ struct HoldToStopButton: View {
         .background {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Theme.darkRed
+                    outlined ? Color.black : Theme.darkRed
                     Theme.red
                         .frame(width: pressing ? geo.size.width : 0)
                         .animation(pressing ? .linear(duration: 1) : .easeOut(duration: 0.15), value: pressing)
                 }
             }
             .clipShape(Capsule())
+            .overlay {
+                if outlined { Capsule().strokeBorder(Theme.darkRed, lineWidth: 2) }
+            }
         }
         .foregroundStyle(Color.white)
         .contentShape(Capsule())

@@ -1,3 +1,4 @@
+import BikeDashCore
 import SwiftUI
 
 /// The strip above the numbers: is each Bluetooth link up (heart rate, speed,
@@ -5,6 +6,7 @@ import SwiftUI
 struct StatusStrip: View {
     let ride: RideController
     let now: Date
+    @AppStorage(Theme.rideThemeKey) private var themeSetting = RideTheme.default.rawValue
 
     var body: some View {
         HStack(spacing: 14) {
@@ -14,7 +16,17 @@ struct StatusStrip: View {
             Spacer(minLength: 0)
             switch ride.speedSource {
             case .gpsFallback: Badge(text: "GPS FALLBACK", fill: Theme.warning, ink: .black)
-            case .gps: Badge(text: "GPS", fill: Color(white: 0.22), ink: .white)
+            case .gps:
+                if RideTheme(stored: themeSetting).outlinesControls {
+                    Text("GPS")
+                        .font(Theme.tileLabel)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .overlay(Capsule().strokeBorder(Theme.outline, lineWidth: 1))
+                        .foregroundStyle(Color.white)
+                } else {
+                    Badge(text: "GPS", fill: Color(white: 0.22), ink: .white)
+                }
             case .sensor: EmptyView()
             }
         }

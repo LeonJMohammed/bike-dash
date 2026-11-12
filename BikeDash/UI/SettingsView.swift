@@ -14,10 +14,30 @@ struct SettingsView: View {
         .flatMap(Page.init(rawValue:)).map { [$0] } ?? []
     @State private var wheelText = ""
     @FocusState private var editingWheel: Bool
+    @AppStorage(Theme.rideThemeKey) private var rideTheme = RideTheme.default.rawValue
+    @AppStorage(Theme.albumColourKey) private var albumColour = false
 
     var body: some View {
         NavigationStack(path: $path) {
             Form {
+                Section {
+                    Picker("Ride theme", selection: Binding(
+                        get: { RideTheme(stored: rideTheme) },
+                        set: { rideTheme = $0.rawValue }
+                    )) {
+                        ForEach(RideTheme.allCases, id: \.self) { theme in
+                            Text(theme.title).tag(theme)
+                        }
+                    }
+                    if RideTheme(stored: rideTheme) == .oledBlack {
+                        Toggle("Album colour behind the music", isOn: $albumColour)
+                    }
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text("OLED black keeps the ride screen pure black, with outlines instead of filled buttons, so the screen lights only the pixels it needs.")
+                }
+
                 Section {
                     Toggle("Auto-pause", isOn: Binding(
                         get: { ride.autoPause },

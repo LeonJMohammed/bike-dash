@@ -1,9 +1,16 @@
+import BikeDashCore
 import SwiftUI
 
-/// Spotify along the bottom: the cover to the side on a background taken from
-/// its colours, the song, and play/pause and skip.
+/// Spotify along the bottom: the cover to the side, the song, and play/pause
+/// and skip. In the OLED black theme the bar is black with a hairline on top
+/// and outlined buttons, unless Settings asks for the album colour behind it.
 struct NowPlayingPanel: View {
     let spotify: SpotifyController
+    @AppStorage(Theme.rideThemeKey) private var themeSetting = RideTheme.default.rawValue
+    @AppStorage(Theme.albumColourKey) private var albumColourSetting = false
+
+    private var theme: RideTheme { RideTheme(stored: themeSetting) }
+    private var usesAlbumColour: Bool { theme.musicBarUsesAlbumColour(albumColourSetting: albumColourSetting) }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -22,12 +29,19 @@ struct NowPlayingPanel: View {
             controls
         }
         .padding(14)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20)
-                .fill(backgroundColor)
-                .ignoresSafeArea(edges: .bottom)
-        )
-        .animation(.easeInOut(duration: 0.6), value: backgroundColor)
+        .background {
+            if usesAlbumColour {
+                UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20)
+                    .fill(backgroundColor)
+                    .ignoresSafeArea(edges: .bottom)
+            } else {
+                Color.black
+                    .ignoresSafeArea(edges: .bottom)
+                    .overlay(alignment: .top) { HorizontalRule() }
+            }
+        }
+        // The colour change is the bar's only animation; black has none.
+        .animation(usesAlbumColour ? .easeInOut(duration: 0.6) : nil, value: backgroundColor)
     }
 
     private var playing: SpotifyController.NowPlaying? {
@@ -35,6 +49,7 @@ struct NowPlayingPanel: View {
     }
 
     private var backgroundColor: Color {
+        guard usesAlbumColour else { return .black }
         guard playing != nil else { return Color(white: 0.12) }
         return spotify.artworkTint ?? Color(white: 0.16)
     }
@@ -62,7 +77,8 @@ struct NowPlayingPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         } else {
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.12))
+                .fill(theme.outlinesControls ? Color.black : Color.white.opacity(0.12))
+                .strokeBorder(theme.outlinesControls ? Theme.outline : .clear, lineWidth: 1.5)
                 .frame(width: 84, height: 84)
                 .overlay(
                     Image(systemName: "music.note")
@@ -93,7 +109,13 @@ struct NowPlayingPanel: View {
                     .font(Theme.pillLabel)
                     .padding(.horizontal, 18)
                     .frame(height: 48)
-                    .background(Theme.red, in: Capsule())
+                    .background {
+                        if theme.outlinesControls {
+                            Capsule().strokeBorder(Theme.red, lineWidth: 2)
+                        } else {
+                            Capsule().fill(Theme.red)
+                        }
+                    }
                     .foregroundStyle(Color.white)
             }
             .buttonStyle(.plain)
@@ -105,7 +127,13 @@ struct NowPlayingPanel: View {
             Image(systemName: symbol)
                 .font(.system(size: diameter * 0.38, weight: .bold))
                 .frame(width: diameter, height: diameter)
-                .background(Color.white.opacity(0.18), in: Circle())
+                .background {
+                    if theme.outlinesControls {
+                        Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1.5)
+                    } else {
+                        Circle().fill(Color.white.opacity(0.18))
+                    }
+                }
                 .foregroundStyle(Color.white)
         }
         .buttonStyle(.plain)

@@ -9,6 +9,12 @@ enum Theme {
     static let warning = Color.orange
     static let paused = Color.yellow
     static let ok = Color.green
+    /// Thin outlines in the OLED black ride theme.
+    static let outline = Color(white: 0.35)
+
+    /// Settings keys (read with @AppStorage).
+    static let rideThemeKey = "rideTheme"
+    static let albumColourKey = "musicAlbumColour"
 
     /// Tall bold numbers.
     static func number(_ size: CGFloat) -> Font {

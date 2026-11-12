@@ -1,3 +1,4 @@
+import AudioToolbox
 import BikeDashCore
 import Foundation
 import Observation
@@ -36,6 +37,15 @@ final class RideController {
 
     @ObservationIgnored private var zoneTracker = ZoneTracker()
 
+    /// The "Eat / Drink" banner is up.
+    private(set) var reminderShowing = false
+    /// The Settings switch (off to start) and interval in minutes (30 to start).
+    private(set) var remindersOn: Bool
+    private(set) var reminderInterval: Int
+    @ObservationIgnored private var reminder = EatDrinkReminder()
+    private static let remindersOnKey = "eatDrinkReminders"
+    private static let reminderIntervalKey = "eatDrinkInterval"
+
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var lastSavedAt = Date.distantPast
     @ObservationIgnored private var appIsActive = false
@@ -60,6 +70,10 @@ final class RideController {
         self.history = history
         let autoPause = UserDefaults.standard.object(forKey: Self.autoPauseKey) as? Bool ?? true
         self.autoPause = autoPause
+        let defaults = UserDefaults.standard
+        remindersOn = defaults.object(forKey: Self.remindersOnKey) != nil && defaults.bool(forKey: Self.remindersOnKey)
+        let interval = defaults.integer(forKey: Self.reminderIntervalKey)
+        reminderInterval = EatDrinkReminder.intervalChoices.contains(interval) ? interval : EatDrinkReminder.defaultInterval
         let preference = UserDefaults.standard.string(forKey: Self.speedSourceKey)
             .flatMap(SpeedSourcePicker.Preference.init(rawValue:)) ?? .sensor
         let picker = SpeedSourcePicker(preference: preference)
@@ -100,6 +114,8 @@ final class RideController {
         startTicker()
         updateScreenLock()
         dimmer.wake(at: Date())
+        reminder.restart(movingTime: 0)
+        reminderShowing = false
         save()
     }
 
@@ -120,6 +136,8 @@ final class RideController {
         altimeter.stop()
         stopTicker()
         dimmer.restore()
+        reminder.restart(movingTime: 0)
+        reminderShowing = false
         refreshSource(at: Date())
         if let record = session.record() {
             history.add(record)
@@ -141,6 +159,32 @@ final class RideController {
         session.settings = Self.pauseRules(autoPause: on, source: picker.source)
     }
 
+    func setRemindersOn(_ on: Bool) {
+        remindersOn = on
+        UserDefaults.standard.set(on, forKey: Self.remindersOnKey)
+        // Switched on mid-ride: the first reminder is a full interval away.
+        restartReminder()
+    }
+
+    func setReminderInterval(_ minutes: Int) {
+        guard EatDrinkReminder.intervalChoices.contains(minutes) else { return }
+        reminderInterval = minutes
+        UserDefaults.standard.set(minutes, forKey: Self.reminderIntervalKey)
+    }
+
+    /// A tap on the "Eat / Drink" banner.
+    func dismissReminder() {
+        reminder.dismiss(movingTime: session.movingTime(at: Date()))
+        reminderShowing = false
+    }
+
+    /// Minutes of moving time to the next reminder, while one is counting down.
+    func minutesToReminder(at now: Date) -> Int? {
+        guard remindersOn, session.isActive, !reminderShowing else { return nil }
+        let seconds = reminder.remaining(movingTime: session.movingTime(at: now), intervalMinutes: reminderInterval)
+        return Int((seconds / 60).rounded(.up))
+    }
+
     func setSpeedPreference(_ preference: SpeedSourcePicker.Preference) {
         UserDefaults.standard.set(preference.rawValue, forKey: Self.speedSourceKey)
         picker.preference = preference
@@ -156,6 +200,34 @@ final class RideController {
     /// rate zone change): brighten a dimmed screen, and dim again 10 s later.
     func wakeScreen() {
         dimmer.wake(at: Date())
+    }
+
+    /// Once a second: puts the "Eat / Drink" banner up when it's due (with a
+    /// buzz, a chime and a bright screen) and takes it down after 15 s.
+    private func updateReminder(at now: Date) {
+        let change = reminder.update(
+            movingTime: session.movingTime(at: now),
+            intervalMinutes: reminderInterval,
+            enabled: remindersOn && session.isActive,
+            now: now
+        )
+        switch change {
+        case .show:
+            reminderShowing = true
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            AudioServicesPlaySystemSound(1007)  // the tri-tone; silent with the ringer off
+        case .hide:
+            reminderShowing = false
+        case nil:
+            break
+        }
+        // Keep the screen bright while the banner is up.
+        if reminderShowing { dimmer.wake(at: now) }
+    }
+
+    private func restartReminder() {
+        reminder.restart(movingTime: session.movingTime(at: Date()))
+        reminderShowing = false
     }
 
     /// Each heart rate reading: a new zone is worth a look.
@@ -279,6 +351,7 @@ final class RideController {
         }
         // The wheel's speed drops to 0 with no packets at all, so check every second.
         feedSensors(CyclingSensorService.Update(at: now))
+        updateReminder(at: now)
         dimmer.update(at: now, rideActive: session.isActive, appActive: inFront)
         if now.timeIntervalSince(lastSavedAt) >= 10 {
             save()
@@ -323,6 +396,8 @@ final class RideController {
             session.resetAltitudeReference()
             altimeter.start()
             startTicker()
+            // The countdown isn't saved: a full interval from here.
+            restartReminder()
         }
         refreshSource(at: Date())
         // The screen lock is set in appBecameActive(): this runs during launch.

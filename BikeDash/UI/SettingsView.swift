@@ -71,6 +71,27 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Reminders", isOn: Binding(
+                        get: { ride.remindersOn },
+                        set: { ride.setRemindersOn($0) }
+                    ))
+                    if ride.remindersOn {
+                        Picker("Every", selection: Binding(
+                            get: { ride.reminderInterval },
+                            set: { ride.setReminderInterval($0) }
+                        )) {
+                            ForEach(EatDrinkReminder.intervalChoices, id: \.self) { minutes in
+                                Text("\(minutes) min").tag(minutes)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Eating and drinking")
+                } footer: {
+                    Text(reminderFooter)
+                }
+
+                Section {
                     Picker("Speed from", selection: Binding(
                         get: { ride.speedPreference },
                         set: { ride.setSpeedPreference($0) }
@@ -226,6 +247,14 @@ struct SettingsView: View {
     private func setMaxHeartRate(_ bpm: Int) {
         if HeartRateZones.maxRange.contains(bpm) { maxHeartRate = bpm }
         maxHeartRateText = String(maxHeartRate)
+    }
+
+    private var reminderFooter: String {
+        var text = "A big \"Eat / Drink\" banner with a buzz and a chime (no chime with the ringer off). It counts moving time only, so it waits while you're paused. Tap it away, or it clears after 15 seconds and counts again."
+        if let minutes = ride.minutesToReminder(at: Date()) {
+            text += " Next in \(minutes) min of riding."
+        }
+        return text
     }
 
     /// Where each zone starts, for the footer.

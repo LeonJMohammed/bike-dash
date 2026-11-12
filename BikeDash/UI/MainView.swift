@@ -26,6 +26,11 @@ struct MainView: View {
             NowPlayingPanel(spotify: spotify)
             HeartRateZoneBar(ride: ride)
         }
+        .overlay(alignment: .top) {
+            if ride.reminderShowing {
+                ReminderBanner { ride.dismissReminder() }
+            }
+        }
         .background(Color.black.ignoresSafeArea())
         .sheet(item: $panel) { panel in
             switch panel {

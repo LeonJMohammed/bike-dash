@@ -87,6 +87,24 @@ hc_ping() {  # [/fail]
   curl -fsS -m 10 --retry 3 "$HC_PING_URL${1:-}" > /dev/null || log "healthchecks: ping failed"
 }
 
+# Whether Xcode is signed in to an Apple ID: without one it can't fetch a
+# signing profile ("No Accounts").
+xcode_signed_in() {
+  defaults read com.apple.dt.Xcode DVTDeveloperAccountManagerAppleIDLists 2>/dev/null | grep -q '@'
+}
+
+# Whether the phone's development services are up. They only start while
+# it's unlocked; until then a build fails with "needs to be unlocked".
+phone_ready_for_development() {
+  local json rc
+  json="$(mktemp)"
+  with_timeout 60 xcrun devicectl device info ddiServices --device "$DEVICE_ID" -j "$json" -q > /dev/null 2>&1 &&
+    grep -Eq '"isUsable"[[:space:]]*:[[:space:]]*true' "$json"
+  rc=$?
+  rm -f "$json"
+  return $rc
+}
+
 # Paths of Xcode's cached signing profiles for Bike Dash, one per line.
 cached_profiles() {
   local dir file

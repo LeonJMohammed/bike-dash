@@ -84,11 +84,12 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 - Logs: `~/Library/Logs/bike-dash/` (one log per build request, plus `xcodebuild.log`)
 
 ## Staying signed (the 7-day limit)
-- **When it runs:** the MacBook's LaunchAgent runs `scripts/refresh.sh` at login and every 3 hours. A run missed while the Mac sleeps happens when it wakes.
-- **What it does:** once less than 2 days are left, it sets Xcode's cached profile aside so Apple issues a fresh 7-day one, then builds and reinstalls over Wi-Fi. A plain rebuild would keep the old expiry. Tested on 5 Nov 2026: a new profile came back, valid 7 days from the renewal.
+- **When it runs:** the MacBook's LaunchAgent runs `scripts/refresh.sh` at login and every 15 minutes. Until a re-sign is due it only checks every 3 hours (and stays silent in between); once due it tries every time, so it catches a moment when the iPhone is home and unlocked. A run missed while the Mac sleeps happens when it wakes.
+- **What it does:** once less than 3 days are left, it first checks what a re-sign needs: Xcode signed in to the Apple ID, the iPhone reachable, and the iPhone's development services up (they only start while it's unlocked). Then it sets Xcode's cached profile aside so Apple issues a fresh 7-day one, and builds and reinstalls over Wi-Fi. A plain rebuild would keep the old expiry. Tested on 5 Nov 2026: a new profile came back, valid 7 days from the renewal.
 - **ntfy alerts** (the system monitor's topic):
   - "Bike Dash re-signed" when it works.
-  - At most once a day: "needs re-signing" (phone not reachable), "has expired", "re-sign failed" or "didn't extend".
+  - When it can't, the alert says what to do: "Unlock your iPhone for Bike Dash", "Bike Dash needs re-signing" (the MacBook can't see the iPhone: be home on Wi-Fi), "Bike Dash can't re-sign" (Xcode is signed out: Xcode > Settings > Accounts), "re-sign failed" (with the error) or "didn't extend".
+  - Each kind at most every 8 hours, only 7 am to 10 pm unless it runs out within 6 hours, and high priority in the last day.
 - **When the MacBook is asleep or off,** it can't re-sign or warn you, so the PC watches too. That's `scripts\pc\resign-watch.ps1`, run every 10 minutes by the task "Bike Dash Re-sign Watch".
   - Whenever it can reach the MacBook, it copies the expiry from `state.json` into `pc-data\resign-watch.json`. That folder is gitignored and also holds its log.
   - When a re-sign is due and it hasn't reached the MacBook for 30 minutes, ntfy says "Bike Dash: open the MacBook". That's only between 7 am and 10 pm, at most every 8 hours, high priority in the last 12 hours, and once a day after it has expired.

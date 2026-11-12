@@ -88,9 +88,12 @@ hc_ping() {  # [/fail]
 }
 
 # Whether Xcode is signed in to an Apple ID: without one it can't fetch a
-# signing profile ("No Accounts").
+# signing profile ("No Accounts"). Xcode 27 lists a signed-in account as an
+# identifier under IDE.Identifiers.Prod (older ones by email); signed out,
+# both lists are empty.
 xcode_signed_in() {
-  defaults read com.apple.dt.Xcode DVTDeveloperAccountManagerAppleIDLists 2>/dev/null | grep -q '@'
+  defaults read com.apple.dt.Xcode DVTDeveloperAccountManagerAppleIDLists 2>/dev/null |
+    grep -qE '@|identifier[[:space:]]*='
 }
 
 # Whether the phone's development services are up. They only start while

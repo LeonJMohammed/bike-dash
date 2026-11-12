@@ -16,6 +16,11 @@ struct SettingsView: View {
     @FocusState private var editingWheel: Bool
     @AppStorage(Theme.rideThemeKey) private var rideTheme = RideTheme.default.rawValue
     @AppStorage(Theme.albumColourKey) private var albumColour = false
+    @AppStorage(ScreenDimmer.enabledKey) private var dimEnabled = true
+    @AppStorage(ScreenDimmer.levelKey) private var dimLevel = ScreenDimming.defaultLevel
+    /// While the dimming slider moves, the screen shows that level; this is
+    /// the brightness to go back to.
+    @State private var brightnessBeforePreview: CGFloat?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -32,10 +37,19 @@ struct SettingsView: View {
                     if RideTheme(stored: rideTheme) == .oledBlack {
                         Toggle("Album colour behind the music", isOn: $albumColour)
                     }
+                    Toggle("Dim during rides", isOn: $dimEnabled)
+                    if dimEnabled {
+                        VStack(alignment: .leading, spacing: 6) {
+                            LabeledContent("Dimmed brightness", value: "\(Int((dimLevel * 100).rounded()))%")
+                            Slider(value: $dimLevel, in: ScreenDimming.levelRange, step: 0.05) { editing in
+                                previewDimming(editing)
+                            }
+                        }
+                    }
                 } header: {
                     Text("Display")
                 } footer: {
-                    Text("OLED black keeps the ride screen pure black, with outlines instead of filled buttons, so the screen lights only the pixels it needs.")
+                    Text("OLED black keeps the ride screen pure black, with outlines instead of filled buttons. During a ride the screen dims after 10 seconds without a touch, and any touch brightens it again. Drag the slider to see the level.")
                 }
 
                 Section {
@@ -147,6 +161,10 @@ struct SettingsView: View {
             .onChange(of: editingWheel) { _, editing in
                 if !editing { setWheel(Int(wheelText) ?? 0) }
             }
+            .onChange(of: dimLevel) { _, level in
+                if brightnessBeforePreview != nil { ScreenDimmer.screen?.brightness = CGFloat(level) }
+            }
+            .onDisappear { previewDimming(false) }
         }
     }
 
@@ -160,6 +178,18 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(ride.sensors.isConnected(role) ? Theme.ok : Theme.dim)
             }
+        }
+    }
+
+    /// Shows the dimmed level while the slider is held, then puts the brightness back.
+    private func previewDimming(_ editing: Bool) {
+        guard let screen = ScreenDimmer.screen else { return }
+        if editing {
+            if brightnessBeforePreview == nil { brightnessBeforePreview = screen.brightness }
+            screen.brightness = CGFloat(dimLevel)
+        } else if let before = brightnessBeforePreview {
+            screen.brightness = before
+            brightnessBeforePreview = nil
         }
     }
 

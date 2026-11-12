@@ -24,10 +24,13 @@ final class RideController {
     let location: LocationService
     let altimeter: AltimeterService
     let history: RideHistory
+    let dimmer = ScreenDimmer()
 
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var lastSavedAt = Date.distantPast
     @ObservationIgnored private var appIsActive = false
+    /// In front and not covered (Control Center, a call), for dimming.
+    @ObservationIgnored private var inFront = false
     /// When the sensor last took over as the speed source.
     @ObservationIgnored private var sensorSince = Date.distantPast
     private static let autoPauseKey = "autoPause"
@@ -83,6 +86,7 @@ final class RideController {
         refreshSource(at: time)
         startTicker()
         updateScreenLock()
+        dimmer.wake(at: Date())
         save()
     }
 
@@ -102,6 +106,7 @@ final class RideController {
         session.finish(at: Date())
         altimeter.stop()
         stopTicker()
+        dimmer.restore()
         refreshSource(at: Date())
         if let record = session.record() {
             history.add(record)
@@ -134,18 +139,34 @@ final class RideController {
         session.addHeartRate(bpm)
     }
 
+    /// A touch anywhere, or something worth seeing (a lap, a reminder, a heart
+    /// rate zone change): brighten a dimmed screen, and dim again 10 s later.
+    func wakeScreen() {
+        dimmer.wake(at: Date())
+    }
+
     // MARK: - App lifecycle
 
     func appBecameActive() {
         appIsActive = true
+        inFront = true
+        dimmer.wake(at: Date())
         // GPS asked for while in the background may not have started.
         location.ensureRunning()
         refreshSource(at: Date())
         updateScreenLock()
     }
 
+    /// Covered by Control Center, a call or the app switcher: normal brightness.
+    func appBecameInactive() {
+        inFront = false
+        dimmer.restore()
+    }
+
     func appWentToBackground() {
         appIsActive = false
+        inFront = false
+        dimmer.restore()
         refreshSource(at: Date())
     }
 
@@ -234,6 +255,7 @@ final class RideController {
         }
         // The wheel's speed drops to 0 with no packets at all, so check every second.
         feedSensors(CyclingSensorService.Update(at: now))
+        dimmer.update(at: now, rideActive: session.isActive, appActive: inFront)
         if now.timeIntervalSince(lastSavedAt) >= 10 {
             save()
         }

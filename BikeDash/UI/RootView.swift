@@ -8,16 +8,20 @@ struct RootView: View {
 
     var body: some View {
         MainView(ride: ride, spotify: spotify, history: history)
+            // Any touch brightens a dimmed ride screen.
+            .background(WindowTouchHook { ride.wakeScreen() })
             .onOpenURL { spotify.handle($0) }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 switch phase {
                 case .active:
                     ride.appBecameActive()
                     spotify.appBecameActive()
+                case .inactive:
+                    ride.appBecameInactive()
                 case .background:
                     ride.appWentToBackground()
                     spotify.appWentToBackground()
-                default:
+                @unknown default:
                     break
                 }
             }

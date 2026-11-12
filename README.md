@@ -67,6 +67,7 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 
 ## Ride theme
 - **OLED black** (the default) keeps every pixel off except the ones that mean something: the numbers, the status dots and alerts. Buttons are outlines, and the music bar is black unless "Album colour behind the music" is on. **Standard** is the earlier look, with filled buttons and the album-coloured bar.
+- **Dimming** (Settings > Display, on by default): during a ride the screen dims after 10 seconds without a touch, to the "Dimmed brightness" level (20% to start; the slider shows the level while you drag it). Any touch anywhere brightens it again, and laps, eating reminders and heart rate zone changes will too as they arrive (`RideController.wakeScreen()`). The brightness goes back to normal when the ride ends, or when Control Center, a call or another app covers Bike Dash. A screen that's already darker than the level is left alone. The screen never locks during a ride.
 - **Refresh rate:** the ride screen redraws once a second and has no continuous animations, so a ProMotion iPhone drops to its lowest refresh rate by itself. A `CADisplayLink` with a low `preferredFrameRateRange` wasn't added: it can only ask for frames, not cap what other views request, so it would keep the display ticking instead of idling.
 
 ## Spotify

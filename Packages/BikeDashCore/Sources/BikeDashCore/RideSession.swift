@@ -28,19 +28,23 @@ public struct RideSession: Sendable {
         public var resumeAbove: Double
         /// ...for this long.
         public var resumeAfter: TimeInterval
+        /// A new lap every this many metres of riding; nil for no auto laps.
+        public var autoLapDistance: Double?
 
         public init(
             autoPause: Bool = true,
             pauseBelow: Double = 1.0,
             pauseAfter: TimeInterval = 4,
             resumeAbove: Double = 1.8,
-            resumeAfter: TimeInterval = 2
+            resumeAfter: TimeInterval = 2,
+            autoLapDistance: Double? = nil
         ) {
             self.autoPause = autoPause
             self.pauseBelow = pauseBelow
             self.pauseAfter = pauseAfter
             self.resumeAbove = resumeAbove
             self.resumeAfter = resumeAfter
+            self.autoLapDistance = autoLapDistance
         }
 
         /// GPS speed wobbles, so it waits a few seconds before pausing or resuming.
@@ -71,6 +75,11 @@ public struct RideSession: Sendable {
         public var maxHeartRate: Int
         /// Optional so rides saved before ascent existed still load.
         public var ascent: Double?
+        /// Optional so rides saved before laps and cadence existed still load.
+        public var laps: [Lap]?
+        public var lapStart: LapStart?
+        public var cadenceTotal: Double?
+        public var cadenceSamples: Int?
     }
 
     /// Can change mid-ride (the auto-pause switch in Settings).
@@ -85,12 +94,17 @@ public struct RideSession: Sendable {
     public private(set) var maxHeartRate = 0
     /// Metres climbed while riding.
     public private(set) var ascent: Double = 0
+    /// Finished laps, oldest first.
+    public private(set) var laps: [Lap] = []
 
     private var movingBefore: TimeInterval = 0
     private var altitude = AscentCounter()
     private var ridingSince: Date?
     private var heartRateTotal: Double = 0
     private var heartRateSamples = 0
+    private var cadenceTotal: Double = 0
+    private var cadenceSamples = 0
+    private var lapStart = LapStart()
     private var track: GPSTrack
     private var slowSince: Date?
     private var fastSince: Date?
@@ -120,6 +134,10 @@ public struct RideSession: Sendable {
         heartRateSamples = snapshot.heartRateSamples
         maxHeartRate = snapshot.maxHeartRate
         ascent = snapshot.ascent ?? 0
+        laps = snapshot.laps ?? []
+        lapStart = snapshot.lapStart ?? LapStart()
+        cadenceTotal = snapshot.cadenceTotal ?? 0
+        cadenceSamples = snapshot.cadenceSamples ?? 0
     }
 
     public var snapshot: Snapshot {
@@ -134,7 +152,11 @@ public struct RideSession: Sendable {
             heartRateTotal: heartRateTotal,
             heartRateSamples: heartRateSamples,
             maxHeartRate: maxHeartRate,
-            ascent: ascent
+            ascent: ascent,
+            laps: laps,
+            lapStart: lapStart,
+            cadenceTotal: cadenceTotal,
+            cadenceSamples: cadenceSamples
         )
     }
 
@@ -173,8 +195,18 @@ public struct RideSession: Sendable {
     public mutating func finish(at time: Date) {
         guard isActive else { return }
         if state == .riding { closeRidingInterval(at: time) }
+        // The stretch since the last lap is the final lap.
+        closeLap(at: time, trigger: .finish)
         state = .finished
         finishedAt = time
+    }
+
+    /// The LAP button: ends the lap under way. Returns it, or nil when there's
+    /// nothing to it yet (no ride, or no time or distance since the last lap).
+    @discardableResult
+    public mutating func lap(at time: Date) -> Lap? {
+        guard isActive else { return nil }
+        return closeLap(at: time, trigger: .manual)
     }
 
     /// Back to idle for the next ride.
@@ -206,6 +238,7 @@ public struct RideSession: Sendable {
         default:
             break
         }
+        if state == .riding { checkAutoLap(at: time) }
     }
 
     /// GPS takes over from the wheel sensor (or the other way round): the next
@@ -234,6 +267,14 @@ public struct RideSession: Sendable {
         heartRateTotal += Double(bpm)
         heartRateSamples += 1
         maxHeartRate = max(maxHeartRate, bpm)
+    }
+
+    /// One cadence sample (the app sends one a second). Counts only while
+    /// riding and pedalling, so coasting doesn't pull the average down.
+    public mutating func addCadence(_ rpm: Double) {
+        guard state == .riding, rpm > 0 else { return }
+        cadenceTotal += rpm
+        cadenceSamples += 1
     }
 
     // MARK: - Readings
@@ -269,6 +310,47 @@ public struct RideSession: Sendable {
     }
 
     // MARK: - Private
+
+    /// Ends the lap once it's as long as the auto-lap distance (measured from
+    /// the last lap, auto or manual).
+    private mutating func checkAutoLap(at time: Date) {
+        guard let lapLength = settings.autoLapDistance, lapLength > 0,
+              distance - lapStart.distance >= lapLength else { return }
+        closeLap(at: time, trigger: .auto)
+    }
+
+    /// Adds the lap under way to `laps` and starts the next one, unless it has
+    /// no time or distance yet.
+    @discardableResult
+    private mutating func closeLap(at time: Date, trigger: Lap.Trigger) -> Lap? {
+        let moving = movingTime(at: time)
+        let lapDistance = distance - lapStart.distance
+        let lapTime = moving - lapStart.movingTime
+        guard lapDistance >= 1 || lapTime >= 1 else { return nil }
+        let lap = Lap(
+            number: laps.count + 1,
+            trigger: trigger,
+            endedAt: time,
+            distance: lapDistance,
+            movingTime: lapTime,
+            averageHeartRate: Self.average(heartRateTotal - lapStart.heartRateTotal, heartRateSamples - lapStart.heartRateSamples),
+            averageCadence: Self.average(cadenceTotal - lapStart.cadenceTotal, cadenceSamples - lapStart.cadenceSamples)
+        )
+        laps.append(lap)
+        lapStart = LapStart(
+            distance: distance,
+            movingTime: moving,
+            heartRateTotal: heartRateTotal,
+            heartRateSamples: heartRateSamples,
+            cadenceTotal: cadenceTotal,
+            cadenceSamples: cadenceSamples
+        )
+        return lap
+    }
+
+    private static func average(_ total: Double, _ samples: Int) -> Int? {
+        samples > 0 ? Int((total / Double(samples)).rounded()) : nil
+    }
 
     private mutating func checkAutoPause(speed: Double?, at time: Date, stillSince: Date?) {
         guard settings.autoPause, let speed else { return }

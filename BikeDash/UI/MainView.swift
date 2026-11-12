@@ -17,7 +17,11 @@ struct MainView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricsPage(ride: ride)
+            if let lap = ride.lapShowing {
+                LapPage(lap: lap) { ride.dismissLap() }
+            } else {
+                MetricsPage(ride: ride)
+            }
             RideControlRow(
                 ride: ride,
                 showHistory: { panel = .history },

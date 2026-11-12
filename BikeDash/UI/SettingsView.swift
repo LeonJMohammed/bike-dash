@@ -64,10 +64,18 @@ struct SettingsView: View {
                         get: { ride.autoPause },
                         set: { ride.setAutoPause($0) }
                     ))
+                    Picker("Auto lap", selection: Binding(
+                        get: { ride.autoLapKm },
+                        set: { ride.setAutoLapKm($0) }
+                    )) {
+                        ForEach(RideController.autoLapChoices, id: \.self) { km in
+                            Text(km == 0 ? "Off" : "Every \(km) km").tag(km)
+                        }
+                    }
                 } header: {
                     Text("Ride")
                 } footer: {
-                    Text("With the speed sensor it pauses when the wheel stops and resumes when it turns. With GPS it pauses below 3.6 km/h and resumes above 6.5 km/h.")
+                    Text("With the speed sensor it pauses when the wheel stops and resumes when it turns. With GPS it pauses below 3.6 km/h and resumes above 6.5 km/h. A lap's numbers show for 5 seconds when it ends (auto lap, or the LAP button), and every lap is listed with the ride.")
                 }
 
                 Section {

@@ -75,6 +75,9 @@ struct HistoryRow: View {
             parts.append("\(bpm) bpm")
         }
         parts.append(RideFormat.metres(record.ascent) + " m up")
+        if !record.splits.isEmpty {
+            parts.append("\(record.splits.count) laps")
+        }
         return parts.joined(separator: " · ")
     }
 }

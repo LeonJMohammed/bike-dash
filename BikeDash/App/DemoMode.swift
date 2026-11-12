@@ -2,7 +2,7 @@ import BikeDashCore
 import Foundation
 
 /// For simulator screenshots only. Launch with
-/// `-demo ride|fallback|paused|finished|idle|history`, and optionally
+/// `-demo ride|fallback|lap|paused|finished|idle|history`, and optionally
 /// `-sheet history|settings` and `-page sensors|sensorData`.
 /// Shows fake data, uses no Bluetooth, GPS, barometer or Spotify, and saves nothing.
 /// The ride scenes send the same sensor packets the real sensors would, so the
@@ -39,6 +39,9 @@ enum DemoMode {
             switch scene {
             case "paused": ride.pause()
             case "finished": ride.finish()
+            case "lap":
+                ride.lap()
+                keepRiding(ride, from: progress)
             default: keepRiding(ride, from: progress)
             }
         }
@@ -59,6 +62,7 @@ enum DemoMode {
             if second % 10 == 0 {
                 ride.addDemoHeartRate(136 + second % 11)
             }
+            ride.addDemoCadence(cadenceAt(second))
         }
         return progress
     }
@@ -105,11 +109,12 @@ enum DemoMode {
         let start = Date().addingTimeInterval(-Double(daysAgo) * 86_400)
         let seconds = Int(minutes * 60)
         let speed = kmh / 3.6
-        var session = RideSession()
+        var session = RideSession(settings: RideSession.Settings(autoLapDistance: 5000))
         session.start(at: start)
         for second in 0...seconds {
             session.add(fix(at: start.addingTimeInterval(Double(second)), north: Double(second) * speed, speed: speed))
             if second % 10 == 0 { session.addHeartRate(132 + second % 17) }
+            session.addCadence(cadenceAt(second))
             if second % 30 == 0 { session.addAltitude(Double(second % 600) / 10) }
         }
         session.finish(at: start.addingTimeInterval(Double(seconds)))

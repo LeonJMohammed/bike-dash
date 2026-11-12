@@ -1,8 +1,9 @@
 import BikeDashCore
 import SwiftUI
 
-/// Small ride buttons (Start, or Pause/Resume and Hold to stop) with the
-/// History and Settings buttons at the end.
+/// Small ride buttons (Start; Pause, Lap and Hold to stop while riding; Resume
+/// and Hold to stop while paused) with the Settings button at the end, and
+/// History too when no ride is under way.
 struct RideControlRow: View {
     let ride: RideController
     let showHistory: () -> Void
@@ -13,6 +14,7 @@ struct RideControlRow: View {
             switch ride.session.state {
             case .riding:
                 PillButton(symbol: "pause.fill", title: "PAUSE") { ride.pause() }
+                PillButton(symbol: "flag.checkered", title: "LAP") { ride.lap() }
                 HoldToStopButton { ride.finish() }
             case .paused:
                 PillButton(symbol: "play.fill", title: "RESUME") { ride.resume() }
@@ -22,7 +24,10 @@ struct RideControlRow: View {
                     .disabled(ride.session.state == .finished)
             }
             Spacer(minLength: 0)
-            CircleButton(symbol: "clock", action: showHistory)
+            // History waits until the ride is over, to make room for LAP.
+            if !ride.session.isActive {
+                CircleButton(symbol: "clock", action: showHistory)
+            }
             CircleButton(symbol: "gearshape.fill", action: showSettings)
         }
         .padding(.horizontal, 12)

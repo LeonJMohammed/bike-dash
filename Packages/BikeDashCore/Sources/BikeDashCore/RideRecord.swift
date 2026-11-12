@@ -15,6 +15,8 @@ public struct RideRecord: Codable, Hashable, Identifiable, Sendable {
     public var maxSpeed: Double
     public var averageHeartRate: Int?
     public var maxHeartRate: Int?
+    /// The splits; nil for rides saved before laps existed.
+    public var laps: [Lap]?
 
     /// Average moving speed, m/s.
     public var averageSpeed: Double? {
@@ -24,6 +26,12 @@ public struct RideRecord: Codable, Hashable, Identifiable, Sendable {
     /// Seconds per km.
     public var averagePace: TimeInterval? {
         distance >= 10 ? movingTime / (distance / 1000) : nil
+    }
+
+    /// Splits worth listing: a ride that's one lap long has none.
+    public var splits: [Lap] {
+        let laps = laps ?? []
+        return laps.count >= 2 ? laps : []
     }
 }
 
@@ -41,7 +49,8 @@ extension RideSession {
             ascent: ascent,
             maxSpeed: maxSpeed,
             averageHeartRate: averageHeartRate,
-            maxHeartRate: maxHeartRate > 0 ? maxHeartRate : nil
+            maxHeartRate: maxHeartRate > 0 ? maxHeartRate : nil,
+            laps: laps
         )
     }
 }

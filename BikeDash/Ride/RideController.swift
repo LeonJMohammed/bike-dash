@@ -43,6 +43,16 @@ final class RideController {
     private(set) var remindersOn: Bool
     private(set) var reminderInterval: Int
     @ObservationIgnored private var reminder = EatDrinkReminder()
+
+    /// Auto lap every this many km, 0 for off (Settings; 5 to start).
+    private(set) var autoLapKm: Int
+    static let autoLapChoices = [0, 1, 2, 5, 10, 20]
+    private static let autoLapKey = "autoLapKm"
+    /// The lap whose numbers are on screen for a few seconds after it ends.
+    private(set) var lapShowing: Lap?
+    @ObservationIgnored private var lapShownAt: Date?
+    @ObservationIgnored private var lapsSeen = 0
+    private static let lapShowFor: TimeInterval = 5
     private static let remindersOnKey = "eatDrinkReminders"
     private static let reminderIntervalKey = "eatDrinkInterval"
 
@@ -74,11 +84,14 @@ final class RideController {
         remindersOn = defaults.object(forKey: Self.remindersOnKey) != nil && defaults.bool(forKey: Self.remindersOnKey)
         let interval = defaults.integer(forKey: Self.reminderIntervalKey)
         reminderInterval = EatDrinkReminder.intervalChoices.contains(interval) ? interval : EatDrinkReminder.defaultInterval
+        let lapKm = defaults.object(forKey: Self.autoLapKey) == nil ? 5 : defaults.integer(forKey: Self.autoLapKey)
+        let autoLapKm = Self.autoLapChoices.contains(lapKm) ? lapKm : 5
+        self.autoLapKm = autoLapKm
         let preference = UserDefaults.standard.string(forKey: Self.speedSourceKey)
             .flatMap(SpeedSourcePicker.Preference.init(rawValue:)) ?? .sensor
         let picker = SpeedSourcePicker(preference: preference)
         self.picker = picker
-        session = RideSession(settings: Self.pauseRules(autoPause: autoPause, source: picker.source))
+        session = RideSession(settings: Self.sessionSettings(autoPause: autoPause, source: picker.source, autoLapKm: autoLapKm))
         location.onFix = { [weak self] fix in
             self?.gotFix(fix)
         }
@@ -116,6 +129,8 @@ final class RideController {
         dimmer.wake(at: Date())
         reminder.restart(movingTime: 0)
         reminderShowing = false
+        lapsSeen = 0
+        dismissLap()
         save()
     }
 
@@ -138,6 +153,9 @@ final class RideController {
         dimmer.restore()
         reminder.restart(movingTime: 0)
         reminderShowing = false
+        // The final lap goes into the summary, not on screen.
+        lapsSeen = session.laps.count
+        dismissLap()
         refreshSource(at: Date())
         if let record = session.record() {
             history.add(record)
@@ -148,7 +166,9 @@ final class RideController {
 
     /// Clears the summary for the next ride.
     func newRide() {
-        session = RideSession(settings: Self.pauseRules(autoPause: autoPause, source: picker.source))
+        session = RideSession(settings: Self.sessionSettings(autoPause: autoPause, source: picker.source, autoLapKm: autoLapKm))
+        lapsSeen = 0
+        dismissLap()
         deleteSave()
         updateScreenLock()
     }
@@ -156,7 +176,27 @@ final class RideController {
     func setAutoPause(_ on: Bool) {
         autoPause = on
         UserDefaults.standard.set(on, forKey: Self.autoPauseKey)
-        session.settings = Self.pauseRules(autoPause: on, source: picker.source)
+        session.settings = Self.sessionSettings(autoPause: on, source: picker.source, autoLapKm: autoLapKm)
+    }
+
+    func setAutoLapKm(_ km: Int) {
+        guard Self.autoLapChoices.contains(km) else { return }
+        autoLapKm = km
+        UserDefaults.standard.set(km, forKey: Self.autoLapKey)
+        session.settings = Self.sessionSettings(autoPause: autoPause, source: picker.source, autoLapKm: km)
+    }
+
+    /// The LAP button: ends the lap under way and shows it.
+    func lap() {
+        session.lap(at: Date())
+        showNewLaps()
+        save()
+    }
+
+    /// A tap on the lap summary: back to the ride numbers early.
+    func dismissLap() {
+        lapShowing = nil
+        lapShownAt = nil
     }
 
     func setRemindersOn(_ on: Bool) {
@@ -194,6 +234,11 @@ final class RideController {
     /// Demo mode only: heart rate samples for a replayed ride.
     func addDemoHeartRate(_ bpm: Int) {
         session.addHeartRate(bpm)
+    }
+
+    /// Demo mode only: cadence samples for a replayed ride's laps.
+    func addDemoCadence(_ rpm: Double) {
+        session.addCadence(rpm)
     }
 
     /// A touch anywhere, or something worth seeing (a lap, a reminder, a heart
@@ -277,7 +322,7 @@ final class RideController {
             // The next GPS fix starts a new segment, so the gap isn't counted twice.
             session.breakGPSTrack()
             if picker.source == .sensor { sensorSince = now }
-            session.settings = Self.pauseRules(autoPause: autoPause, source: picker.source)
+            session.settings = Self.sessionSettings(autoPause: autoPause, source: picker.source, autoLapKm: autoLapKm)
         }
         updateGPS()
     }
@@ -301,6 +346,7 @@ final class RideController {
     private func gotFix(_ fix: GPSFix) {
         guard picker.source != .sensor else { return }
         session.add(fix)
+        showNewLaps()
     }
 
     /// A sensor packet, a connection change or a tick: picks the source, then
@@ -321,10 +367,26 @@ final class RideController {
         }
         let stillSince = sensors.wheelLastTurnedAt.map { max($0, sensorSince) }
         session.addMovement(distance: metres, speed: sensors.speed(at: update.at), at: update.at, stillSince: stillSince)
+        showNewLaps()
     }
 
-    private static func pauseRules(autoPause: Bool, source: SpeedSourcePicker.Source) -> RideSession.Settings {
-        source == .sensor ? .wheelSensor(autoPause: autoPause) : .gps(autoPause: autoPause)
+    private static func sessionSettings(autoPause: Bool, source: SpeedSourcePicker.Source, autoLapKm: Int) -> RideSession.Settings {
+        var settings: RideSession.Settings = source == .sensor ? .wheelSensor(autoPause: autoPause) : .gps(autoPause: autoPause)
+        settings.autoLapDistance = autoLapKm > 0 ? Double(autoLapKm) * 1000 : nil
+        return settings
+    }
+
+    /// A lap that just ended (auto or LAP): show its numbers for 5 seconds and
+    /// brighten a dimmed screen. Laps from a ride being picked up again, or
+    /// replayed in demo mode, are only counted.
+    private func showNewLaps() {
+        guard session.laps.count > lapsSeen else { return }
+        lapsSeen = session.laps.count
+        guard session.isActive, let lap = session.laps.last,
+              Date().timeIntervalSince(lap.endedAt) < Self.lapShowFor else { return }
+        lapShowing = lap
+        lapShownAt = Date()
+        wakeScreen()
     }
 
     // MARK: - Private
@@ -349,8 +411,15 @@ final class RideController {
         if let bpm = heartRate.bpm(at: now) {
             session.addHeartRate(bpm)
         }
+        // One cadence sample a second for the lap averages (0 while coasting doesn't count).
+        if let rpm = sensors.cadence(at: now) {
+            session.addCadence(rpm)
+        }
         // The wheel's speed drops to 0 with no packets at all, so check every second.
         feedSensors(CyclingSensorService.Update(at: now))
+        if let lapShownAt, now.timeIntervalSince(lapShownAt) >= Self.lapShowFor {
+            dismissLap()
+        }
         updateReminder(at: now)
         dimmer.update(at: now, rideActive: session.isActive, appActive: inFront)
         if now.timeIntervalSince(lastSavedAt) >= 10 {
@@ -390,8 +459,9 @@ final class RideController {
         guard !DemoMode.isOn,
               let data = try? Data(contentsOf: saveURL),
               let snapshot = try? JSONDecoder().decode(RideSession.Snapshot.self, from: data) else { return }
-        session = RideSession(restoring: snapshot, settings: Self.pauseRules(autoPause: autoPause, source: picker.source))
+        session = RideSession(restoring: snapshot, settings: Self.sessionSettings(autoPause: autoPause, source: picker.source, autoLapKm: autoLapKm))
         log.info("Restored a ride in state \(String(describing: snapshot.state), privacy: .public)")
+        lapsSeen = session.laps.count
         if session.isActive {
             session.resetAltitudeReference()
             altimeter.start()

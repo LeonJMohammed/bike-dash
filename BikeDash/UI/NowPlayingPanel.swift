@@ -55,11 +55,17 @@ struct NowPlayingPanel: View {
     }
 
     private var title: String {
-        playing?.title ?? "Spotify"
+        if let playing { return playing.title }
+        return spotify.showsReconnectPrompt ? "Reconnect Spotify" : "Spotify"
     }
 
     private var subtitle: String {
         if let playing { return playing.subtitle }
+        if spotify.showsReconnectPrompt { return "Spotify isn't answering" }
+        if spotify.signingIn { return "Signing in" }
+        if spotify.status == .disconnected && spotify.canSignIn && !spotify.isSignedIn {
+            return spotify.lastError ?? "Sign in once to stay connected"
+        }
         switch spotify.status {
         case .notConfigured: return "Not set up"
         case .connecting: return "Connecting"
@@ -101,25 +107,33 @@ struct NowPlayingPanel: View {
                 .disabled(!canSkip)
                 .opacity(canSkip ? 1 : 0.4)
             }
-        } else if spotify.isConfigured && spotify.status != .connecting {
-            Button {
-                spotify.connectViaSpotifyApp()
-            } label: {
-                Text("CONNECT")
-                    .font(Theme.pillLabel)
-                    .padding(.horizontal, 18)
-                    .frame(height: 48)
-                    .background {
-                        if theme.outlinesControls {
-                            Capsule().strokeBorder(Theme.red, lineWidth: 2)
-                        } else {
-                            Capsule().fill(Theme.red)
-                        }
-                    }
-                    .foregroundStyle(Color.white)
+        } else if spotify.showsReconnectPrompt {
+            pill("RECONNECT") { spotify.connectViaSpotifyApp() }
+        } else if spotify.canSignIn && !spotify.isSignedIn && spotify.status == .disconnected {
+            if !spotify.signingIn {
+                pill("SIGN IN") { spotify.signIn() }
             }
-            .buttonStyle(.plain)
+        } else if spotify.isConfigured && spotify.status != .connecting {
+            pill("CONNECT") { spotify.connectViaSpotifyApp() }
         }
+    }
+
+    private func pill(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(Theme.pillLabel)
+                .padding(.horizontal, 18)
+                .frame(height: 48)
+                .background {
+                    if theme.outlinesControls {
+                        Capsule().strokeBorder(Theme.red, lineWidth: 2)
+                    } else {
+                        Capsule().fill(Theme.red)
+                    }
+                }
+                .foregroundStyle(Color.white)
+        }
+        .buttonStyle(.plain)
     }
 
     private func circleButton(_ symbol: String, diameter: CGFloat, action: @escaping () -> Void) -> some View {

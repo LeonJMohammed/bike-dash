@@ -75,7 +75,17 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 - **Refresh rate:** the ride screen redraws once a second and has no continuous animations, so a ProMotion iPhone drops to its lowest refresh rate by itself. A `CADisplayLink` with a low `preferredFrameRateRange` wasn't added: it can only ask for frames, not cap what other views request, so it would keep the display ticking instead of idling.
 
 ## Spotify
-- The music bar under the numbers uses the Spotify iOS SDK (App Remote) through the Spotify app. Spotify has to be playing to connect, so **Connect** opens Spotify, starts the music and comes back with a token that's good for an hour.
+- The music bar under the numbers uses the Spotify iOS SDK (App Remote) through the Spotify app. Spotify has to be running to connect; **Connect** / **Reconnect** opens Spotify, starts the music and comes back.
+- **Signing in once** (Settings > Spotify > Sign in, or SIGN IN on the music bar) opens Spotify's sign-in page in a sheet. The code that comes back is swapped for tokens by the **token service on the home PC**, which holds the client secret. The refresh token (sealed by the service, useless without it) is kept in the iOS Keychain with the current access token; before connecting, Bike Dash refreshes an access token that has under 5 minutes left. If the PC can't be reached it keeps the refresh token and tries later; only Spotify refusing it ("invalid_grant") signs Bike Dash out. Logic and tests: `BikeDashCore/SpotifyAuth.swift`.
+- **Retries**: when App Remote fails or drops while Bike Dash is in front, it tries again after 2, 5 and 15 seconds, then every 30 seconds; after the quick tries the music bar says **Reconnect Spotify**. Nothing retries in the background (Spotify asks apps to let go there), and coming back to the front starts the 2-5-15 again.
+- Demo: `-demo ride -spotifyDemo reconnect` shows the prompt.
+
+### Spotify token service (home PC)
+- `server/spotify-token-service.js`, plain Node (no packages), port 3010, at `https://jlmoh.com/bike-dash/spotify/` through the Cloudflare Tunnel: `POST swap` (`code`), `POST refresh` (`refresh_token`), `GET health`. Tests: `node --test server/spotify-token-service.test.js`.
+- Secrets in `server/.env` (git-ignored; see `server/.env.example`): `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `TOKEN_KEY` (32 random bytes, base64; a new key signs the app out). `health` answers `{"ok":false}` until all three are set.
+- Started by the Landing Hub (`landing\startup.ps1`, launcher `landing\bike-dash-spotify.ps1`, window "Bike Dash Spotify"); stopped by `restart.ps1`; watched by the System Monitor ("Bike Dash Spotify", recovers by running Home Startup). Tunnel route in `.cloudflared\config.yml`.
+- Cloudflare Access covers jlmoh.com, so `jlmoh.com/bike-dash/spotify` needs a **Bypass** Access application, like `/funnies`. Without it the app gets Access's login redirect, which it treats as "try later".
+- It never logs codes or tokens; 30 requests a minute per address; 4 KB bodies.
 - The Spotify developer app needs the redirect URI `bikedash://spotify-login-callback` and the iOS bundle ID `com.jlmoh.bikedash`. Development mode requires the owner to have Premium and allows up to 5 users.
 - The Client ID goes in `Config/Secrets.xcconfig` on the Mac as `SPOTIFY_CLIENT_ID`.
 

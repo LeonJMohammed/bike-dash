@@ -16,3 +16,6 @@ DerivedData/
 # macOS / Xcode noise
 .DS_Store
 xcuserdata/
+
+# PC-only: the Spotify token service secrets (see server/.env.example)
+/server/.env

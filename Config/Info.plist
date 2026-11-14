@@ -49,6 +49,8 @@
 	</array>
 	<key>SpotifyClientID</key>
 	<string>$(SPOTIFY_CLIENT_ID)</string>
+	<key>SpotifyTokenServiceURL</key>
+	<string>https://jlmoh.com/bike-dash/spotify</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

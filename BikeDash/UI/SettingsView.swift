@@ -169,15 +169,27 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Status", value: spotifyStatus)
-                    if spotify.status == .connected {
-                        Button("Disconnect") { spotify.disconnect() }
-                    } else if spotify.isConfigured {
-                        Button("Connect Spotify") { spotify.connectViaSpotifyApp() }
+                    if spotify.canSignIn {
+                        LabeledContent("Signed in", value: spotify.isSignedIn ? "Yes, stays signed in" : "No")
+                    }
+                    if spotify.canSignIn && !spotify.isSignedIn {
+                        Button(spotify.signingIn ? "Signing in…" : "Sign in to Spotify") { spotify.signIn() }
+                            .disabled(spotify.signingIn)
+                    }
+                    if spotify.isConfigured && spotify.status != .connected {
+                        Button("Open Spotify and connect") { spotify.connectViaSpotifyApp() }
+                    }
+                    if spotify.isSignedIn || spotify.status == .connected {
+                        Button("Sign out", role: .destructive) { spotify.disconnect() }
+                    }
+                    if let error = spotify.lastError, spotify.status != .connected {
+                        Text(error)
+                            .foregroundStyle(Theme.dim)
                     }
                 } header: {
                     Text("Spotify")
                 } footer: {
-                    Text("Connecting opens Spotify, starts your music and comes back here.")
+                    Text(spotifyFooter)
                 }
 
                 Section {
@@ -277,6 +289,15 @@ struct SettingsView: View {
     private func setWheel(_ millimetres: Int) {
         ride.sensors.setCircumference(millimetres)
         wheelText = String(ride.sensors.circumference)
+    }
+
+    private var spotifyFooter: String {
+        let retry = "When Spotify doesn't answer, Bike Dash tries again after 2, 5 and 15 seconds, then every 30 seconds, "
+            + "and the music bar offers Reconnect Spotify, which opens Spotify and starts the music."
+        guard spotify.canSignIn else {
+            return "Connecting opens Spotify, starts your music and comes back here. " + retry
+        }
+        return "Sign in once; the home PC then renews the sign-in, so it lasts beyond the hour. " + retry
     }
 
     private var spotifyStatus: String {

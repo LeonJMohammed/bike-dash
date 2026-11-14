@@ -105,6 +105,7 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
   - "Bike Dash re-signed" when it works.
   - When it can't, the alert says what to do: "Unlock your iPhone for Bike Dash", "Bike Dash needs re-signing" (the MacBook can't see the iPhone: be home on Wi-Fi), "Bike Dash can't re-sign" (Xcode is signed out: Xcode > Settings > Accounts), "re-sign failed" (with the error) or "didn't extend".
   - Each kind at most every 8 hours, only 7 am to 10 pm unless it runs out within 6 hours, and high priority in the last day.
+- **Xcode's sign-in, checked early** (13 Nov 2026, after Xcode lost the Apple ID twice in a week): the 3-hourly check also looks at Xcode's sign-in while no re-sign is due. Signed out, ntfy says "Xcode signed out: Bike Dash can't re-sign", with the date the re-sign starts, under the same rules (it shares the "signedout" kind, so at most every 8 hours, 7 am to 10 pm). Once it's signed in again, a quiet "Xcode is signed in again". `~/.config/bike-dash/xcode-signed-out` marks the signed-out state between runs.
 - **When the MacBook is asleep or off,** it can't re-sign or warn you, so the PC watches too. That's `scripts\pc\resign-watch.ps1`, run every 10 minutes by the task "Bike Dash Re-sign Watch".
   - Whenever it can reach the MacBook, it copies the expiry from `state.json` into `pc-data\resign-watch.json`. That folder is gitignored and also holds its log.
   - When a re-sign is due and it hasn't reached the MacBook for 30 minutes, ntfy says "Bike Dash: open the MacBook". That's only between 7 am and 10 pm, at most every 8 hours, high priority in the last 12 hours, and once a day after it has expired.
@@ -117,7 +118,7 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
     - `-Dry` shows what the watch sees; add `-PretendNow '2026-11-11 08:00'` or `-PretendOffline` to try other cases.
     - `-Test` sends a test alert, and `-Register` sets up its task.
     - `-SetExpiry '<date time>'` tells it the expiry while the MacBook can't be reached.
-  - Over SSH, `refresh.sh --dry-run [--pretend-expiry <epoch>] [--device <id>]` shows what it would do.
+  - Over SSH, `refresh.sh --dry-run [--pretend-expiry <epoch>] [--pretend-signed-out] [--device <id>]` shows what it would do.
   - `scripts/profiles.sh` lists the cached profiles.
 - Profiles that were set aside stay in `~/.config/bike-dash/profile-backup/`. The app's Settings shows "Signed until".
 

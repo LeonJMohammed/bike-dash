@@ -6,12 +6,16 @@
 # Until a re-sign is due, a scheduled run only checks every 3 hours and says
 # nothing in between; once due, every run tries. Before building it checks
 # what a re-sign needs (Xcode signed in, the iPhone home and unlocked), and
-# the alert says which one is missing.
+# the alert says which one is missing. The 3-hourly check also looks at
+# Xcode's sign-in on its own, so a signed-out Xcode is reported days before
+# the re-sign needs it (twice in a week in November 2026), with a quiet note
+# once it's signed in again.
 #
 # Also run on request from the PC (mac.ps1 refresh [-Force], mac.ps1
 # testalert). Signing needs the logged-in session, so real renewals must go
 # through the agent; --dry-run works over plain SSH.
-#   refresh.sh [--scheduled] [--force] [--dry-run] [--pretend-expiry <epoch>] [--device <id>] [--test-alert]
+#   refresh.sh [--scheduled] [--force] [--dry-run] [--pretend-expiry <epoch>] [--pretend-signed-out]
+#              [--device <id>] [--test-alert]
 set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 load_env
@@ -20,17 +24,21 @@ RENEW_WITHIN=$((72 * 3600))
 CHECK_EVERY=$((3 * 3600))
 ALERTS_FILE="$CONFIG_DIR/alerts-sent"
 LAST_CHECK_FILE="$CONFIG_DIR/last-check"
+# Present while Xcode is known to be signed out (so "signed in again" is said once).
+SIGNED_OUT_FILE="$CONFIG_DIR/xcode-signed-out"
 
 scheduled=false
 force=false
 dry=false
 pretend=""
+pretend_signed_out=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --scheduled) scheduled=true ;;
     --force) force=true ;;
     --dry-run) dry=true ;;
     --pretend-expiry) pretend="$2"; shift ;;
+    --pretend-signed-out) pretend_signed_out=true ;;
     --device) DEVICE_ID="$2"; shift ;;
     --test-alert)
       notify "TEST: Bike Dash" "A test from the MacBook's re-sign job. Nothing is wrong." low
@@ -65,17 +73,15 @@ if [ -n "$expiry" ]; then
 else
   say "No record of the installed build's signature"
 fi
-if ! $due; then
-  say "Not due yet"
-  $dry || hc_ping
-  exit 0
-fi
-
 if [ "$left" -gt 0 ]; then
   stops="It stops opening $(when "$expiry")."
 else
   stops="It has expired and won't open until it's re-signed."
 fi
+
+signed_in() {
+  ! $pretend_signed_out && xcode_signed_in
+}
 
 # One kind of alert at most every 8 hours, and only 7 am to 10 pm unless it
 # runs out within 6 hours, so a weekend away doesn't buzz all night.
@@ -124,11 +130,36 @@ blocked() {  # cause [detail]
   $dry || hc_ping
 }
 
+# Not due: still make sure Xcode is signed in, so there's time to fix it.
+if ! $due; then
+  say "Not due yet"
+  if signed_in; then
+    if [ -f "$SIGNED_OUT_FILE" ]; then
+      say "Xcode is signed in again"
+      if $dry; then
+        say "Would send: Xcode is signed in again"
+      else
+        rm -f "$SIGNED_OUT_FILE"
+        notify "Xcode is signed in again" "Bike Dash can re-sign as usual." low
+      fi
+    fi
+  else
+    say "Xcode is signed out of the Apple ID (re-sign due from $(when $((expiry - RENEW_WITHIN))))"
+    alert signedout "Xcode signed out: Bike Dash can't re-sign" \
+      "Xcode on the MacBook is signed out of the Apple ID. Sign in again under Xcode > Settings > Accounts before $(when $((expiry - RENEW_WITHIN))), when the re-sign starts. $stops"
+    $dry || touch "$SIGNED_OUT_FILE"
+  fi
+  $dry || hc_ping
+  exit 0
+fi
+
 # What a re-sign needs, cheapest check first.
-if ! xcode_signed_in; then
+if ! signed_in; then
+  $dry || touch "$SIGNED_OUT_FILE"
   blocked signedout
   exit 0
 fi
+$dry || rm -f "$SIGNED_OUT_FILE"
 if [ -z "${DEVICE_ID:-}" ] ||
    ! with_timeout 60 xcrun devicectl device info details --device "$DEVICE_ID" > "$LOG_DIR/reach.log" 2>&1; then
   blocked unreachable

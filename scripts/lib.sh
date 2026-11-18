@@ -154,3 +154,37 @@ write_state() {
 }
 EOF
 }
+
+# Tailscale, which the PC reaches this Mac through (builds and the PC's re-sign
+# watch). An app update on 15 Nov 2026 left it switched off for three days, so
+# the agent checks it every run and turns it back on (Leon, 18 Nov 2026).
+TAILSCALE=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+tailscale_state() {  # Running, Stopped, NeedsLogin, ... or empty if it doesn't answer
+  with_timeout 15 "$TAILSCALE" status --json 2>/dev/null |
+    sed -n 's/.*"BackendState": *"\([^"]*\)".*/\1/p' | head -n 1
+}
+# Prints a line only when it had to act.
+ensure_tailscale() {
+  local before after
+  [ -x "$TAILSCALE" ] || return 0
+  before="$(tailscale_state)"
+  case "$before" in
+    Running|Starting) return 0 ;;
+    NeedsLogin|NeedsMachineAuth)
+      echo "Tailscale needs signing in on the MacBook ($before): open it from the menu bar"
+      log "tailscale: $before, can't turn it on from here"
+      return 1 ;;
+    '') open -g -a Tailscale 2>/dev/null; sleep 10 ;;  # the app wasn't running
+  esac
+  with_timeout 30 "$TAILSCALE" up > /dev/null 2>&1
+  sleep 3
+  after="$(tailscale_state)"
+  if [ "$after" = "Running" ]; then
+    echo "Tailscale was off (${before:-not running}); turned it back on"
+    log "tailscale: ${before:-not running} -> Running"
+  else
+    echo "Tailscale was off (${before:-not running}) and didn't come back on (${after:-no answer})"
+    log "tailscale: ${before:-not running}, still ${after:-no answer} after 'up'"
+    return 1
+  fi
+}

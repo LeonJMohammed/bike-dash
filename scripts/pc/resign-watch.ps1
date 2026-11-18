@@ -10,7 +10,8 @@ always on, so it watches for that:
   * When a re-sign is due and it hasn't reached the MacBook for 30 minutes, it sends the
     ntfy alert "Bike Dash: open the MacBook": only between 8 pm and midnight, at most every
     8 hours (so once an evening), high priority in the last 12 hours, and once a day after it
-    has expired.
+    has expired. The night before it runs out (under 28 hours left, 8 pm to 8 am) it repeats
+    every 15 minutes instead (every 20 in practice), through the night, at high priority.
   * While the MacBook can be reached it stays quiet: the MacBook's own job re-signs, says
     "Bike Dash re-signed", and alerts if the iPhone isn't reachable or a build fails.
 
@@ -53,6 +54,9 @@ $DayEndHour         = 24   # ... until midnight, like the MacBook's own alerts
 $RepeatHours        = 8    # between alerts while it's due
 $ExpiredRepeatHours = 24   # between alerts once it has expired
 $UrgentHours        = 12   # high priority in the last 12 hours
+$LastNightHours     = 28   # the night before it runs out: under this much left ...
+$NightEndHour       = 8    # ... from 20:00 until 8 am (refresh.sh's LAST_NIGHT, NIGHT_UNTIL)
+$LastNightRepeatMin = 15   # ... alerts every 15 minutes (every 20 in practice: this runs every 10)
 $Invariant = [Globalization.CultureInfo]::InvariantCulture
 $Fix = 'Open it on the charger with your iPhone on home Wi-Fi, and it re-signs by itself.'
 
@@ -164,23 +168,25 @@ function Get-Alert($State, [long]$Now, [bool]$Reachable) {
         return @{ Send = $false; Why = "$status; the MacBook was reachable $([math]::Floor(($Now - $seen) / 60)) min ago, so it gets $OfflineMinutes min." }
     }
     $hour = (ConvertFrom-Epoch $Now).Hour
-    if ($hour -lt $DayStartHour -or $hour -ge $DayEndHour) {
+    $lastNight = (-not $expired) -and $left -le $LastNightHours * 3600 -and ($hour -ge $DayStartHour -or $hour -lt $NightEndHour)
+    if (-not $lastNight -and ($hour -lt $DayStartHour -or $hour -ge $DayEndHour)) {
         return @{ Send = $false; Why = "$status and the MacBook can't be reached, but alerts only go out 8 pm to midnight: waiting until $($DayStartHour):00." }
     }
     # The repeat gap only counts alerts of the same kind, so the first "has expired" comes at
     # the next daytime run rather than a day after the last "open the MacBook".
     $kind = if ($expired) { 'expired' } else { 'due' }
-    $repeat = if ($expired) { $ExpiredRepeatHours } else { $RepeatHours }
+    $repeatSec = if ($lastNight) { $LastNightRepeatMin * 60 } elseif ($expired) { $ExpiredRepeatHours * 3600 } else { $RepeatHours * 3600 }
+    $repeatText = if ($lastNight) { "$LastNightRepeatMin min (the night before it runs out)" } elseif ($expired) { "$ExpiredRepeatHours h" } else { "$RepeatHours h" }
     if ($State.lastAlertAt -and [long]$State.alertedExpiry -eq $expiry -and $State.alertKind -eq $kind -and
-        ($Now - [long]$State.lastAlertAt) -lt $repeat * 3600) {
-        return @{ Send = $false; Why = "$status and the MacBook can't be reached; told at $(Format-When $State.lastAlertAt), again after $repeat h." }
+        ($Now - [long]$State.lastAlertAt) -lt $repeatSec) {
+        return @{ Send = $false; Why = "$status and the MacBook can't be reached; told at $(Format-When $State.lastAlertAt), again after $repeatText." }
     }
     if ($expired) {
         return @{ Send = $true; Kind = $kind; Why = "$status, and the MacBook can't be reached."; Priority = 'high'
                   Title = 'Bike Dash has expired'
                   Body = "Bike Dash won't open until it's re-signed, and the MacBook seems to be asleep or off. $Fix" }
     }
-    $priority = if ($left -lt $UrgentHours * 3600) { 'high' } else { 'default' }
+    $priority = if ($lastNight -or $left -lt $UrgentHours * 3600) { 'high' } else { 'default' }
     return @{ Send = $true; Kind = $kind; Why = "$status, and the MacBook can't be reached."; Priority = $priority
               Title = 'Bike Dash: open the MacBook'; Body = (Get-DueMessage $expiry $Now) }
 }

@@ -3,21 +3,31 @@
 # day 5 (under 3.5 days left) this gets a fresh signature and reinstalls the
 # app over Wi-Fi.
 #
-# Evenings only (Leon, 18 Nov 2026): the LaunchAgent starts it at 20:00, 21:00,
-# 22:00 and 23:00 with --scheduled, and a scheduled run at any other hour does
-# nothing. launchd runs a slot missed while the Mac slept as soon as it wakes;
-# in the evening that's a normal try, in the morning it stops straight away, so
-# the next try is the next evening's slot. Once due, every evening slot tries
-# until one works (20:00, then 21:00, 22:00 and 23:00 as retries), and the
-# evenings of days 5, 6 and 7 come before it expires. Until due, the first slot
-# of each evening only checks. Before building it checks what a re-sign needs
-# (Xcode signed in, the iPhone home and unlocked), and the alert says which one
-# is missing. The evening check also looks at Xcode's sign-in on its own, so a
-# signed-out Xcode is reported days before the re-sign needs it (twice in a
-# week in November 2026), with a quiet note once it's signed in again.
+# The LaunchAgent starts it every 15 minutes with --scheduled (after checking
+# that Tailscale is on; see agent.sh), and this decides whether to do anything:
 #
-# ntfy goes out only from 8 pm to midnight, whatever starts the run; outside
-# that it's held for the next evening (test alerts on request excepted).
+# - Evenings (Leon, 18 Nov 2026): at most once in each hour from 20:00 to
+#   23:59, so 20:00 with 21:00, 22:00 and 23:00 as retries. A slot missed while
+#   the Mac slept is taken when it wakes, if that's still the evening (a wake at
+#   21:30 tries at 21:30, then 22:00); a morning wake does nothing and waits for
+#   the evening. Once due, every evening tries until one works, and the
+#   evenings of days 5, 6 and 7 come before it expires. Until due, the first
+#   run of each evening only checks.
+# - The night before it runs out (Leon, 18 Nov 2026): from 8 pm to 8 am with
+#   under 28 hours left, every run tries, every 15 minutes, and every one that
+#   can't re-sign sends its reminder (high priority), until it's re-signed or
+#   has run out. 28 hours covers the whole night before an evening expiry.
+# - Any other time a scheduled run does nothing.
+#
+# Before building it checks what a re-sign needs (Xcode signed in, the iPhone
+# home and unlocked), and the alert says which one is missing. The evening
+# check also looks at Xcode's sign-in on its own, so a signed-out Xcode is
+# reported days before the re-sign needs it (twice in a week in November
+# 2026), with a quiet note once it's signed in again.
+#
+# ntfy goes out only from 8 pm to midnight, once an evening per kind, or every
+# 15 minutes through the night before it runs out; otherwise it's held for the
+# next evening (test alerts on request excepted).
 #
 # Also run on request from the PC (mac.ps1 refresh [-Force], mac.ps1
 # testalert), at any hour. Signing needs the logged-in session, so real
@@ -30,9 +40,12 @@ load_env
 
 RENEW_WITHIN=$((84 * 3600))  # 3.5 days: due from the evening of day 5
 CHECK_EVERY=$((12 * 3600))   # until due, one check per evening
-EVENING_FROM=20              # runs and alerts only 20:00 to midnight
+EVENING_FROM=20              # evening runs and alerts: 20:00 to midnight
+NIGHT_UNTIL=8                # the night before it runs out lasts until 8 am
+LAST_NIGHT=$((28 * 3600))    # "the night before": under this much left
 ALERTS_FILE="$CONFIG_DIR/alerts-sent"
 LAST_CHECK_FILE="$CONFIG_DIR/last-check"
+LAST_SLOT_FILE="$CONFIG_DIR/last-slot"  # the evening hour last tried (YYYYmmddHH)
 # Present while Xcode is known to be signed out (so "signed in again" is said once).
 SIGNED_OUT_FILE="$CONFIG_DIR/xcode-signed-out"
 
@@ -65,22 +78,42 @@ say() {
   log "refresh: $*"
 }
 
-# Checked when it matters, so a build that runs past midnight sends nothing.
-in_evening() {
-  local hour="${pretend_hour:-$((10#$(date +%H)))}"
-  [ "$hour" -ge "$EVENING_FROM" ]
-}
-
-# A scheduled run outside the evening (launchd catching up at a morning wake,
-# or a login) waits for the next evening slot.
-if $scheduled && ! in_evening; then
-  $dry && echo "Outside 8 pm to midnight: nothing to do until the next evening slot"
-  exit 0
-fi
-
 now="$(date +%s)"
 expiry="${pretend:-$(state_expiry)}"
 if [ -n "$expiry" ]; then left=$((expiry - now)); else left=0; fi
+
+# Checked when it matters, so a build that runs past midnight sends nothing
+# (unless it's the night before it runs out).
+hour_now() {
+  echo "${pretend_hour:-$((10#$(date +%H)))}"
+}
+in_evening() {
+  [ "$(hour_now)" -ge "$EVENING_FROM" ]
+}
+last_night() {
+  local hour
+  hour="$(hour_now)"
+  [ -n "$expiry" ] && [ "$left" -gt 0 ] && [ "$left" -le "$LAST_NIGHT" ] &&
+    { [ "$hour" -ge "$EVENING_FROM" ] || [ "$hour" -lt "$NIGHT_UNTIL" ]; }
+}
+
+# Whether a scheduled run does anything (see the top).
+if $scheduled; then
+  if last_night; then
+    $dry && echo "The night before it runs out: trying every 15 minutes"
+  elif in_evening; then
+    slot="$(date +%Y%m%d)$(printf %02d "$(hour_now)")"
+    if [ "$(cat "$LAST_SLOT_FILE" 2>/dev/null)" = "$slot" ]; then
+      $dry && echo "Already ran in this hour: next at the top of the hour"
+      exit 0
+    fi
+    $dry || echo "$slot" > "$LAST_SLOT_FILE"
+  else
+    $dry && echo "Outside 8 pm to midnight and not the night before it runs out: nothing to do"
+    exit 0
+  fi
+fi
+
 due=true
 if ! $force && [ -n "$expiry" ] && [ "$left" -gt "$RENEW_WITHIN" ]; then due=false; fi
 
@@ -117,9 +150,10 @@ if [ -n "$expiry" ]; then
   fi
 fi
 
-# A quiet note (low priority), only 8 pm to midnight. Returns 1 if held.
+# A quiet note (low priority), only 8 pm to midnight or the night before it
+# runs out. Returns 1 if held.
 note() {  # title message
-  if ! in_evening; then
+  if ! in_evening && ! last_night; then
     say "Held '$1': ntfy only goes out 8 pm to midnight"
     return 1
   fi
@@ -131,20 +165,25 @@ note() {  # title message
 }
 
 # One kind of alert at most every 8 hours (so once an evening), and only
-# 8 pm to midnight; one held outside that comes at the next evening run.
+# 8 pm to midnight; one held outside that comes at the next evening run. The
+# night before it runs out, every run's alert goes out (every 15 minutes).
 alert() {  # kind title message
   local last priority=default
-  last="$(grep "^$1 " "$ALERTS_FILE" 2>/dev/null | tail -n 1 | cut -d' ' -f2)"
-  case "$last" in ''|*[!0-9]*) last=0 ;; esac
-  if [ $((now - last)) -lt $((8 * 3600)) ]; then
-    say "Alert '$1' was sent under 8 hours ago"
-    return 0
+  if last_night; then
+    priority=high
+  else
+    last="$(grep "^$1 " "$ALERTS_FILE" 2>/dev/null | tail -n 1 | cut -d' ' -f2)"
+    case "$last" in ''|*[!0-9]*) last=0 ;; esac
+    if [ $((now - last)) -lt $((8 * 3600)) ]; then
+      say "Alert '$1' was sent under 8 hours ago"
+      return 0
+    fi
+    if ! in_evening; then
+      say "Alert '$1' held: ntfy only goes out 8 pm to midnight"
+      return 0
+    fi
+    [ "$left" -lt $((24 * 3600)) ] && priority=high
   fi
-  if ! in_evening; then
-    say "Alert '$1' held: ntfy only goes out 8 pm to midnight"
-    return 0
-  fi
-  [ "$left" -lt $((24 * 3600)) ] && priority=high
   if $dry; then
     say "Would alert ($priority): $2: $3"
     return 0
@@ -153,6 +192,13 @@ alert() {  # kind title message
   echo "$1 $now" >> "$ALERTS_FILE"
   tail -n 50 "$ALERTS_FILE" > "$ALERTS_FILE.tmp" && mv "$ALERTS_FILE.tmp" "$ALERTS_FILE"
 }
+
+# When the next try is, for the alerts.
+if last_night; then
+  retry="every 15 minutes until it runs out"
+else
+  retry="on the hour until 11 pm, then tomorrow evening"
+fi
 
 # The alert for why a re-sign can't happen, then stop.
 blocked() {  # cause [detail]
@@ -168,7 +214,7 @@ blocked() {  # cause [detail]
     locked)
       say "The phone is locked"
       alert locked "Unlock your iPhone for Bike Dash" \
-        "The MacBook is ready to re-sign Bike Dash, but your iPhone is locked. Unlock it at home; the MacBook tries again on the hour until 11 pm, then tomorrow evening. $stops" ;;
+        "The MacBook is ready to re-sign Bike Dash, but your iPhone is locked. Unlock it at home; the MacBook tries again $retry. $stops" ;;
     failed)
       say "The build or install failed: $2"
       alert failed "Bike Dash re-sign failed" "$2 $stops" ;;

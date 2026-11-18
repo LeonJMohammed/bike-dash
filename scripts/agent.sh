@@ -3,13 +3,19 @@
 # session where the keychain is unlocked.
 #
 # - A request in the queue folder (from the PC over SSH) runs that request.
-# - Started by the evening schedule (20:00 to 23:00, hourly) or at login, with
-#   nothing queued, it runs the re-sign check, which does nothing outside
-#   8 pm to midnight (see refresh.sh).
+# - Started by the schedule (every 15 minutes) or at login, with nothing
+#   queued, it runs the re-sign check, which decides for itself whether it's
+#   time (evenings, or the night before it expires; see refresh.sh).
+# - Every run first makes sure Tailscale is on, and turns it on if not.
 # launchd never runs two copies of this job, so builds never overlap; requests
 # that arrive meanwhile start it again.
 set -uo pipefail
 source "$(dirname "$0")/lib.sh"
+
+ts="$(ensure_tailscale 2>&1)"
+if [ -n "$ts" ]; then
+  printf '== %s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$ts" >> "$LOG_DIR/refresh.log"
+fi
 
 shopt -s nullglob
 found=false

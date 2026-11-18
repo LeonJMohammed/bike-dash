@@ -1,15 +1,16 @@
 <#
 Bike Dash re-sign watch, run by this PC every 10 minutes (Windows PowerShell 5.1).
 
-The MacBook re-signs Bike Dash by itself once less than 2 days of the 7-day signature are
-left, but it can't do that, or tell you anything, while it's asleep or off. This PC is
+The MacBook re-signs Bike Dash by itself from the evening of day 5 of the 7-day signature (8 pm
+to midnight only), but it can't do that, or tell you anything, while it's asleep or off. This PC is
 always on, so it watches for that:
 
   * Whenever it can reach the MacBook, it reads when the signature on the iPhone expires
     (~/.config/bike-dash/state.json there) and keeps a copy in pc-data\resign-watch.json.
   * When a re-sign is due and it hasn't reached the MacBook for 30 minutes, it sends the
-    ntfy alert "Bike Dash: open the MacBook": only between 7 am and 10 pm, at most every
-    8 hours, high priority in the last 12 hours, and once a day after it has expired.
+    ntfy alert "Bike Dash: open the MacBook": only between 8 pm and midnight, at most every
+    8 hours (so once an evening), high priority in the last 12 hours, and once a day after it
+    has expired.
   * While the MacBook can be reached it stays quiet: the MacBook's own job re-signs, says
     "Bike Dash re-signed", and alerts if the iPhone isn't reachable or a build fails.
 
@@ -45,10 +46,10 @@ $Ssh         = 'C:\Windows\System32\OpenSSH\ssh.exe'
 $MacHost     = 'mac'   # Host entry in ~/.ssh/config
 $TaskName    = 'Bike Dash Re-sign Watch'
 
-$RenewWithinHours   = 48   # the MacBook renews with less than this left (RENEW_WITHIN in refresh.sh)
+$RenewWithinHours   = 84   # the MacBook renews with less than this left (RENEW_WITHIN in refresh.sh)
 $OfflineMinutes     = 30   # a MacBook seen this recently may just be napping
-$DayStartHour       = 7    # alerts only from 7:00 ...
-$DayEndHour         = 22   # ... until 22:00
+$DayStartHour       = 20   # alerts only from 20:00 ...
+$DayEndHour         = 24   # ... until midnight, like the MacBook's own alerts
 $RepeatHours        = 8    # between alerts while it's due
 $ExpiredRepeatHours = 24   # between alerts once it has expired
 $UrgentHours        = 12   # high priority in the last 12 hours
@@ -164,7 +165,7 @@ function Get-Alert($State, [long]$Now, [bool]$Reachable) {
     }
     $hour = (ConvertFrom-Epoch $Now).Hour
     if ($hour -lt $DayStartHour -or $hour -ge $DayEndHour) {
-        return @{ Send = $false; Why = "$status and the MacBook can't be reached, but it's night: waiting until $($DayStartHour):00." }
+        return @{ Send = $false; Why = "$status and the MacBook can't be reached, but alerts only go out 8 pm to midnight: waiting until $($DayStartHour):00." }
     }
     # The repeat gap only counts alerts of the same kind, so the first "has expired" comes at
     # the next daytime run rather than a day after the last "open the MacBook".

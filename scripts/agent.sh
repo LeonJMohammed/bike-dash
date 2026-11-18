@@ -3,8 +3,9 @@
 # session where the keychain is unlocked.
 #
 # - A request in the queue folder (from the PC over SSH) runs that request.
-# - Started by the 15-minute schedule or at login, with nothing queued, it
-#   runs the re-sign check (which paces itself; see refresh.sh).
+# - Started by the evening schedule (20:00 to 23:00, hourly) or at login, with
+#   nothing queued, it runs the re-sign check, which does nothing outside
+#   8 pm to midnight (see refresh.sh).
 # launchd never runs two copies of this job, so builds never overlap; requests
 # that arrive meanwhile start it again.
 set -uo pipefail
@@ -35,7 +36,7 @@ for req in "$QUEUE_DIR"/*.req; do
 done
 
 if ! $found; then
-  # Runs every 15 minutes, but only says something when it checked or tried.
+  # Only says something when it checked or tried.
   out="$(/bin/bash "$REPO/scripts/refresh.sh" --scheduled 2>&1)"
   if [ -n "$out" ]; then
     printf '== %s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$out" >> "$LOG_DIR/refresh.log"

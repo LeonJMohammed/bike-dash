@@ -18,13 +18,39 @@
 	<array>
 		<string>__HOME__/.config/bike-dash/queue</string>
 	</array>
-	<!-- The re-sign check: at login, then every 15 minutes. It only does
-	     anything every 3 hours until a re-sign is due, then tries each time.
-	     A run missed while the Mac sleeps happens when it wakes. -->
+	<!-- The re-sign check, evenings only: 20:00, then 21:00, 22:00 and 23:00
+	     as retries. launchd runs a slot missed while the Mac slept when it
+	     wakes; refresh.sh ignores that (and a login) outside 20:00 to
+	     midnight, so a morning wake waits for the next evening. -->
 	<key>RunAtLoad</key>
 	<true/>
-	<key>StartInterval</key>
-	<integer>900</integer>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>20</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>21</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>22</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>23</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+	</array>
 	<key>StandardOutPath</key>
 	<string>__HOME__/Library/Logs/bike-dash/launchd.log</string>
 	<key>StandardErrorPath</key>

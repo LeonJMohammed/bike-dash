@@ -3,7 +3,8 @@ import Foundation
 
 /// For simulator screenshots only. Launch with
 /// `-demo ride|fallback|lap|paused|finished|idle|history`, and optionally
-/// `-sheet history|settings` and `-page sensors|sensorData`.
+/// `-sheet routes|history|settings` and `-page sensors|sensorData|routePreview`.
+/// Every scene has a few Strava routes listed and one picked for the next ride.
 /// Shows fake data, uses no Bluetooth, GPS, barometer or Spotify, and saves nothing.
 /// The ride scenes send the same sensor packets the real sensors would, so the
 /// sensor maths runs as it does on the bike; `fallback` has the speed sensor
@@ -23,8 +24,9 @@ enum DemoMode {
     }
 
     @MainActor
-    static func load(ride: RideController, spotify: SpotifyController, history: RideHistory) {
+    static func load(ride: RideController, spotify: SpotifyController, history: RideHistory, routes: RouteLibrary) {
         spotify.loadDemo()
+        loadRoutes(routes)
         switch scene {
         case "idle":
             break
@@ -119,6 +121,45 @@ enum DemoMode {
         }
         session.finish(at: start.addingTimeInterval(Double(seconds)))
         return session.record()
+    }
+
+    /// Listed Strava routes, with a loop round the Savannah saved and picked.
+    @MainActor
+    private static func loadRoutes(_ routes: RouteLibrary) {
+        let loop = StravaRoute(id: "3344550000000000123", name: "Savannah loop", kind: .ride, distance: 3720,
+                               elevationGain: 24, updatedAt: "2026-11-02T09:00:00Z")
+        let listed = [
+            loop,
+            StravaRoute(id: "3344550000000000456", name: "Chaguaramas out and back", kind: .ride, distance: 32_400,
+                        elevationGain: 118, updatedAt: "2026-10-18T07:30:00Z", isPrivate: true),
+            StravaRoute(id: "3344550000000000789", name: "Maracas climb", kind: .ride, distance: 41_800,
+                        elevationGain: 612, updatedAt: "2026-09-27T06:10:00Z", starred: true),
+            StravaRoute(id: "3344550000000000999", name: "Grand Stand 5K", kind: .run, distance: 5080,
+                        elevationGain: 25, updatedAt: "2026-10-23T05:00:00Z"),
+        ]
+        routes.loadDemo(strava: listed, saved: loop, gpx: savannahGPX())
+    }
+
+    /// An oval about 3.7 km round, with a gentle rise on the north side.
+    private static func savannahGPX() -> Data {
+        let centre = (lat: 10.6705, lon: -61.5135)
+        let east = metresPerDegree * cos(centre.lat * .pi / 180)
+        var body = ""
+        for step in 0...120 {
+            let angle = Double(step) / 120 * 2 * .pi
+            let north = 680 * cos(angle), eastward = 500 * sin(angle)
+            let lat = centre.lat + north / metresPerDegree
+            let lon = centre.lon + eastward / east
+            let ele = 22 + 12 * cos(angle) + 2 * sin(angle * 5)
+            body += String(format: "<trkpt lat=\"%.6f\" lon=\"%.6f\"><ele>%.1f</ele></trkpt>\n", lat, lon, ele)
+        }
+        return Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx creator="StravaGPX" version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+        <trk><name>Savannah loop</name><trkseg>
+        \(body)</trkseg></trk>
+        </gpx>
+        """.utf8)
     }
 
     /// About 27 km/h, drifting a little.

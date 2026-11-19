@@ -8,4 +8,8 @@ BIKEDASH_COMMIT = dev
 // Empty unless Secrets.xcconfig sets it; the Music page then says "not set up".
 SPOTIFY_CLIENT_ID =
 
+// The app key for the home PC's Strava routes (node server/spotify-token-service.js
+// mint-routes-key). Empty unless Secrets.xcconfig sets it; Routes then says "not set up".
+BIKE_DASH_ROUTES_KEY =
+
 #include? "Secrets.xcconfig"

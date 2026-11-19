@@ -11,6 +11,8 @@ enum Theme {
     static let ok = Color.green
     /// Thin outlines in the OLED black ride theme.
     static let outline = Color(white: 0.35)
+    /// The route line and route markers: the app icon's cyan (#06b6d4).
+    static let route = Color(red: 0.024, green: 0.714, blue: 0.831)
 
     /// Settings keys (read with @AppStorage).
     static let rideThemeKey = "rideTheme"

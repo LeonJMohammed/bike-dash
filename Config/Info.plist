@@ -51,6 +51,10 @@
 	<string>$(SPOTIFY_CLIENT_ID)</string>
 	<key>SpotifyTokenServiceURL</key>
 	<string>https://jlmoh.com/bike-dash/spotify</string>
+	<key>RoutesServiceURL</key>
+	<string>https://jlmoh.com/bike-dash/routes</string>
+	<key>RoutesAppKey</key>
+	<string>$(BIKE_DASH_ROUTES_KEY)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

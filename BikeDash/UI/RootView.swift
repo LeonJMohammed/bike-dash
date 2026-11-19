@@ -4,10 +4,11 @@ struct RootView: View {
     let ride: RideController
     let spotify: SpotifyController
     let history: RideHistory
+    let routes: RouteLibrary
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        MainView(ride: ride, spotify: spotify, history: history)
+        MainView(ride: ride, spotify: spotify, history: history, routes: routes)
             // Any touch brightens a dimmed ride screen.
             .background(WindowTouchHook { ride.wakeScreen() })
             .onOpenURL { url in
@@ -34,7 +35,7 @@ struct RootView: View {
             }
             .task {
                 if DemoMode.isOn {
-                    DemoMode.load(ride: ride, spotify: spotify, history: history)
+                    DemoMode.load(ride: ride, spotify: spotify, history: history, routes: routes)
                 }
             }
     }

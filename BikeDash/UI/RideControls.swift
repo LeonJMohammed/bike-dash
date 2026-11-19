@@ -3,9 +3,12 @@ import SwiftUI
 
 /// Small ride buttons (Start; Pause, Lap and Hold to stop while riding; Resume
 /// and Hold to stop while paused) with the Settings button at the end, and
-/// History too when no ride is under way.
+/// Routes and History too when no ride is under way.
 struct RideControlRow: View {
     let ride: RideController
+    /// A route is picked for the next ride: the map button turns cyan.
+    var routePicked = false
+    var showRoutes: () -> Void = {}
     let showHistory: () -> Void
     let showSettings: () -> Void
 
@@ -24,8 +27,9 @@ struct RideControlRow: View {
                     .disabled(ride.session.state == .finished)
             }
             Spacer(minLength: 0)
-            // History waits until the ride is over, to make room for LAP.
+            // Routes and History wait until the ride is over, to make room for LAP.
             if !ride.session.isActive {
+                CircleButton(symbol: "map", tint: routePicked ? Theme.route : nil, action: showRoutes)
                 CircleButton(symbol: "clock", action: showHistory)
             }
             CircleButton(symbol: "gearshape.fill", action: showSettings)
@@ -70,6 +74,8 @@ struct PillButton: View {
 
 struct CircleButton: View {
     let symbol: String
+    /// Colours the symbol (and the outline in OLED black), e.g. a picked route.
+    var tint: Color?
     let action: () -> Void
     @AppStorage(Theme.rideThemeKey) private var theme = RideTheme.default.rawValue
 
@@ -81,12 +87,12 @@ struct CircleButton: View {
                 .frame(width: 44, height: 44)
                 .background {
                     if outlined {
-                        Circle().strokeBorder(Theme.outline, lineWidth: 1.5)
+                        Circle().strokeBorder(tint ?? Theme.outline, lineWidth: 1.5)
                     } else {
                         Circle().fill(Color(white: 0.16))
                     }
                 }
-                .foregroundStyle(Color.white)
+                .foregroundStyle(tint ?? Color.white)
         }
         .buttonStyle(.plain)
     }

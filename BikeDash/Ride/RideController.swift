@@ -25,6 +25,8 @@ final class RideController {
     let location: LocationService
     let altimeter: AltimeterService
     let history: RideHistory
+    /// The route picked for the next ride; it clears when that ride ends.
+    let routes: RouteLibrary
     let dimmer = ScreenDimmer()
     let liveActivity = LiveActivityController()
     /// Bumped when a tap on the Live Activity asks for the ride screen, so any
@@ -75,13 +77,15 @@ final class RideController {
         sensors: CyclingSensorService,
         location: LocationService,
         altimeter: AltimeterService,
-        history: RideHistory
+        history: RideHistory,
+        routes: RouteLibrary
     ) {
         self.heartRate = heartRate
         self.sensors = sensors
         self.location = location
         self.altimeter = altimeter
         self.history = history
+        self.routes = routes
         let autoPause = UserDefaults.standard.object(forKey: Self.autoPauseKey) as? Bool ?? true
         self.autoPause = autoPause
         let defaults = UserDefaults.standard
@@ -171,6 +175,8 @@ final class RideController {
         if let record = session.record() {
             history.add(record)
         }
+        // A route was for this ride only (Leon's choice): the next is a normal ride.
+        routes.rideFinished()
         updateScreenLock()
         save()
     }

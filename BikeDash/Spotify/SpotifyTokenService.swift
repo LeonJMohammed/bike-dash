@@ -46,7 +46,8 @@ struct SpotifyTokenService {
 }
 
 /// A Cloudflare Access login redirect is a failure to report, not a page to follow.
-private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+/// Also used by RoutesService.
+final class NoRedirects: NSObject, URLSessionTaskDelegate {
     static let session = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,

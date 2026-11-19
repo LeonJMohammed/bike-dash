@@ -1,17 +1,18 @@
 import SwiftUI
 
 /// One screen: the numbers, a row of small ride buttons, Spotify, and the heart
-/// rate zone strip along the very bottom. History and Settings open as sheets
-/// from the small buttons.
+/// rate zone strip along the very bottom. Routes, History and Settings open as
+/// sheets from the small buttons.
 struct MainView: View {
     enum Panel: String, Identifiable {
-        case history, settings
+        case routes, history, settings
         var id: String { rawValue }
     }
 
     let ride: RideController
     let spotify: SpotifyController
     let history: RideHistory
+    let routes: RouteLibrary
     /// `-sheet history|settings` opens one at launch (simulator screenshots).
     @State private var panel = Panel(rawValue: UserDefaults.standard.string(forKey: "sheet") ?? "")
 
@@ -24,6 +25,8 @@ struct MainView: View {
             }
             RideControlRow(
                 ride: ride,
+                routePicked: routes.nextRide != nil,
+                showRoutes: { panel = .routes },
                 showHistory: { panel = .history },
                 showSettings: { panel = .settings }
             )
@@ -41,6 +44,7 @@ struct MainView: View {
         }
         .sheet(item: $panel) { panel in
             switch panel {
+            case .routes: RoutesView(library: routes)
             case .history: HistoryView(history: history)
             case .settings: SettingsView(ride: ride, spotify: spotify)
             }

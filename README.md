@@ -90,7 +90,28 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 - The Spotify developer app needs the redirect URI `bikedash://spotify-login-callback` and the iOS bundle ID `com.jlmoh.bikedash`. Development mode requires the owner to have Premium and allows up to 5 users.
 - The Client ID goes in `Config/Secrets.xcconfig` on the Mac as `SPOTIFY_CLIENT_ID`.
 
-## Strava routes (home PC)
+## Routes
+- **Opening it:** the **map** button next to History opens Routes. Like History, it's only there when no ride is under way. The button turns cyan while a route is picked for the next ride.
+- **What's listed:**
+  - The route picked for the next ride.
+  - The routes saved **on this phone**.
+  - Your **Strava bike routes**, then your run routes, from the home PC (below).
+  - Pull down to refresh.
+- **The preview:** tapping a route shows its line on a dark map, its distance and climb (Strava's figures) and an elevation profile from the GPX. **USE FOR NEXT RIDE** saves the GPX in `Application Support/routes/` with an `index.json` and picks the route.
+- **Without signal:** a saved route opens with no connection at all, so it still works with Airplane mode on. The Strava list then explains it can't reach the PC.
+- **The map itself can't be saved.** MapKit has no way to download map tiles ahead of time, and apps can't use the maps downloaded in Apple Maps. Without signal, the route line, your position and the warnings still work, but the map underneath may be blank. The preview says so.
+- **One ride only (Leon's choice):** the pick clears when the ride ends, so the next ride is a normal one with GPS off unless a route is picked again. The route stays saved on the phone.
+- **Core logic:** `BikeDashCore` has `Route` (the GPX reader, length, climb with a 2 m threshold, profile, the point at a distance), `RouteTracker` and `StravaRoute`.
+- **How `RouteTracker` follows the rider:**
+  - It works out how far along the route the rider is and how far off it, and looks near the last position first. That keeps the way out and the way back of an out-and-back apart, and starts a loop at its start.
+  - It looks over the whole route only when nothing nearby fits, for example after a shortcut.
+  - It compares only the places where the route passes closest to the rider, not every segment's end. Otherwise the end of the segment just behind always looks like a tie.
+  - Between parts of the route that are about as close, it picks the one nearest the last progress. Going backwards counts three times over.
+  - A part pointing against the rider's heading counts as 100 m further away. The heading comes from the phone's GPS course, or from the last fixes 8 m or more apart. Strava draws the way back of an out-and-back on the very same line, so without this, GPS error along the road at the turnaround could make it follow the way out backwards. It's a cost, not a filter, so a wrong heading from GPS noise can't throw progress far along the route.
+  - **Checked against a real route:** Leon's Brian Lara Cricket Academy Loop (23.2 km, 358 points, several out-and-backs), ridden in simulation with 8 m of GPS error in each direction, a drifting error and random jitter. Progress stays within about 35 m (within 27 m with the GPS course) and never runs backwards.
+- **Demo:** `-demo idle -sheet routes [-page routePreview]` shows four listed routes and a picked Savannah loop.
+
+### Routes service (home PC)
 The same PC service, the same port 3010 and the same launcher also serve your saved Strava routes for the Routes screen, at `https://jlmoh.com/bike-dash/routes/`. The code is in `server/strava-routes.js` and the tests are in `server/strava-routes.test.js`.
 - **Endpoints:**
   - `GET list` returns `{ routes: [{ id, name, kind (ride/run), distance_m, elevation_gain_m, updated_at, private, starred, summary_polyline, … }], private_hidden }`, newest first.
@@ -116,7 +137,7 @@ The same PC service, the same port 3010 and the same launcher also serve your sa
 `ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|fallback|paused|finished|idle|history [-sheet history|settings] [-page sensors|sensorData]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware; the ride scenes send the packets the sensors would, so the sensor maths runs as on the bike, and `fallback` has the speed sensor switched off.
 
 ## Mac-only files (never in git)
-- `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, later `SPOTIFY_CLIENT_ID`
+- `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, `SPOTIFY_CLIENT_ID`, `BIKE_DASH_ROUTES_KEY` (the routes app key from the PC)
 - `~/.config/bike-dash/refresh.env` (mode 600): `DEVICE_ID`, `NTFY_SERVER`, `NTFY_TOPIC`, `HC_PING_URL`
 - `~/.config/bike-dash/state.json`: when the installed build's signature expires
 - Logs: `~/Library/Logs/bike-dash/` (one log per build request, plus `xcodebuild.log`)

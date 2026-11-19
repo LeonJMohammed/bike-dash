@@ -88,11 +88,15 @@ function routeSummary(r) {
  * `now` is for tests.
  */
 function createRoutes(config, { fetchImpl = fetch, now = () => Date.now() } = {}) {
-  let token = null;        // { access_token, expires_at, scopes } from Race Tracker
+  let token = null;        // { access_token, expires_at, scopes, at } from Race Tracker
   let athleteId = null;
 
   async function borrowToken() {
-    if (token && token.expires_at * 1000 > now() + 60_000) return token;
+    // Kept until a minute before it runs out; without read_all, asked again after a minute, so
+    // approving read_all on Strava (Race Tracker's setup-strava) shows here straight away.
+    const fresh = token && token.expires_at * 1000 > now() + 60_000 &&
+      (token.scopes.includes('read_all') || now() - token.at < 60_000);
+    if (fresh) return token;
     let res;
     try {
       res = await fetchImpl(config.raceTrackerUrl, {
@@ -110,6 +114,7 @@ function createRoutes(config, { fetchImpl = fetch, now = () => Date.now() } = {}
         access_token: json.access_token,
         expires_at: Number(json.expires_at),
         scopes: Array.isArray(json.scopes) ? json.scopes : [],
+        at: now(),
       };
       return token;
     }

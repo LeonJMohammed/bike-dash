@@ -205,6 +205,20 @@ test('a token near its expiry is borrowed again', async () => {
   } finally { await s.close(); }
 });
 
+test('without read_all the token is asked for again after a minute', async () => {
+  let clock = 1_000_000_000_000;
+  const s = await start({ scopes: ['read'], expiresAt: 1_000_000_000 + 6 * 3600 }, config, () => clock);
+  try {
+    await s.get('/bike-dash/routes/health', { auth: null });
+    clock += 30_000;
+    await s.get('/bike-dash/routes/health', { auth: null });
+    assert.equal(s.calls.filter((c) => c.url === config.raceTrackerUrl).length, 1, 'within the minute: kept');
+    clock += 31_000;
+    await s.get('/bike-dash/routes/health', { auth: null });
+    assert.equal(s.calls.filter((c) => c.url === config.raceTrackerUrl).length, 2, 'after it: asked again');
+  } finally { await s.close(); }
+});
+
 test('Strava busy is try-later; a refused token is dropped', async () => {
   let s = await start({ strava: (path) => (path.startsWith('/athletes/') ? reply(429, {}) : null) });
   try {

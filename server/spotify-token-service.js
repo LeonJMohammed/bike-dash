@@ -10,13 +10,22 @@
 //
 // The refresh token the app keeps is encrypted here (AES-256-GCM, TOKEN_KEY in .env): on its own
 // it's useless, and only this service can use it. Codes and tokens are never logged.
-// No dependencies; Node 18+ (fetch). See README.md, "Spotify token service".
+//
+// The same service (same port, same launcher) also serves Strava routes for the Routes screen,
+// under /bike-dash/routes/...: see strava-routes.js.
+//
+//   node server/spotify-token-service.js                    run the service
+//   node server/spotify-token-service.js mint-routes-key    print a new app key for the routes
+//                                                           (adds ROUTES_KEY_ID to .env if missing)
+//
+// No dependencies; Node 18+ (fetch). See README.md, "PC service".
 'use strict';
 
-const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const { seal, open } = require('./seal');
+const routesApi = require('./strava-routes');
 
 const BASE = '/bike-dash/spotify';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
@@ -48,6 +57,10 @@ function configFrom(env) {
     redirectUri: env.SPOTIFY_REDIRECT_URI || 'bikedash://spotify-login-callback',
     key: key && key.length === 32 ? key : null,
     port: Number(env.PORT) || 3010,
+    // Routes (strava-routes.js)
+    raceTrackerUrl: env.RACE_TRACKER_TOKEN_URL || 'http://127.0.0.1:3003/race-tracker/api/strava/token',
+    raceTrackerSecret: env.RACE_TRACKER_SECRET || '',
+    routesKeyId: env.ROUTES_KEY_ID || '',
   };
 }
 
@@ -55,28 +68,7 @@ function isConfigured(config) {
   return Boolean(config.clientId && config.clientSecret && config.key);
 }
 
-// ---- The refresh token the app holds: "v1." + base64url(iv 12 | tag 16 | ciphertext) ----
-
-function seal(plain, key) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const body = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
-  return 'v1.' + Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64url');
-}
-
-/** The plain refresh token, or null if it isn't one of ours (or was tampered with). */
-function open(sealed, key) {
-  if (typeof sealed !== 'string' || !sealed.startsWith('v1.')) return null;
-  const raw = Buffer.from(sealed.slice(3), 'base64url');
-  if (raw.length < 29) return null;
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
-    decipher.setAuthTag(raw.subarray(12, 28));
-    return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString('utf8');
-  } catch {
-    return null;
-  }
-}
+// The refresh token the app holds is sealed with TOKEN_KEY: seal.js.
 
 // ---- Spotify ----
 
@@ -170,9 +162,10 @@ function log(line) {
   console.log(`${new Date().toISOString()}  ${line}`);
 }
 
-function createServer(config, { fetchImpl = fetch, quiet = false } = {}) {
+function createServer(config, { fetchImpl = fetch, quiet = false, now } = {}) {
   const allow = rateLimiter(RATE_LIMIT);
   const note = quiet ? () => {} : log;
+  const routes = routesApi.createRoutes(config, { fetchImpl, now });
 
   return http.createServer(async (req, res) => {
     const send = (status, body) => {
@@ -180,6 +173,29 @@ function createServer(config, { fetchImpl = fetch, quiet = false } = {}) {
       res.end(JSON.stringify(body));
     };
     const url = new URL(req.url, 'http://localhost');
+
+    if (url.pathname.startsWith(routesApi.ROUTES_BASE + '/')) {
+      const sub = url.pathname.slice(routesApi.ROUTES_BASE.length);
+      const who = req.headers['cf-connecting-ip'] || req.socket.remoteAddress || '?';
+      if (sub !== '/health' && !allow(who)) { note(`routes${sub} 429 (rate limit)`); return send(429, { error: 'too_many_requests' }); }
+      let out;
+      try {
+        out = await routes.handle(req, url);
+      } catch (e) {
+        note(`routes${sub} 500 (${e && e.message})`);
+        return send(500, { error: 'internal' });
+      }
+      if (sub !== '/health' || out.json.ok === false) {
+        // Route ids are fine to log; the app key and Strava tokens never are.
+        note(`routes${sub} ${out.status}${out.json && out.json.error ? ` (${out.json.error})` : ''}`);
+      }
+      if (out.text !== undefined) {
+        res.writeHead(out.status, { 'Content-Type': out.type, 'Cache-Control': 'no-store' });
+        return res.end(out.text);
+      }
+      return send(out.status, out.json);
+    }
+
     const route = url.pathname.startsWith(BASE + '/') ? url.pathname.slice(BASE.length) : null;
 
     if (route === '/health' && req.method === 'GET') {
@@ -204,12 +220,34 @@ function createServer(config, { fetchImpl = fetch, quiet = false } = {}) {
 
 module.exports = { loadEnv, configFrom, isConfigured, seal, open, failure, rateLimiter, createServer };
 
-if (require.main === module) {
+/** Prints a new routes app key to stdout (nothing else), adding ROUTES_KEY_ID to .env first if missing. */
+function mintRoutesKey(envFile) {
+  let env = { ...loadEnv(envFile), ...process.env };
+  if (!env.ROUTES_KEY_ID) {
+    const text = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8') : '';
+    fs.writeFileSync(envFile, text.trimEnd() +
+      '\n\n# Routes: the app key\'s id. A new value retires every app key minted before it.\n' +
+      `ROUTES_KEY_ID=${routesApi.newRoutesKeyId()}\n`);
+    env = { ...loadEnv(envFile), ...process.env };
+  }
+  const config = configFrom(env);
+  if (!config.key) {
+    console.error('TOKEN_KEY is missing or not 32 bytes in server/.env');
+    process.exit(1);
+  }
+  process.stdout.write(routesApi.mintAppKey(config) + '\n');
+}
+
+if (require.main === module && process.argv[2] === 'mint-routes-key') {
+  mintRoutesKey(path.join(__dirname, '.env'));
+} else if (require.main === module) {
   const env = { ...loadEnv(path.join(__dirname, '.env')), ...process.env };
   const config = configFrom(env);
   const server = createServer(config);
   server.listen(config.port, '127.0.0.1', () => {
     log(`Bike Dash Spotify token service on http://127.0.0.1:${config.port}${BASE}` +
       (isConfigured(config) ? '' : ' -- NOT CONFIGURED: fill in .env (see .env.example)'));
+    log(`Strava routes on http://127.0.0.1:${config.port}${routesApi.ROUTES_BASE}` +
+      (routesApi.isRoutesConfigured(config) ? '' : ' -- NOT CONFIGURED: RACE_TRACKER_SECRET and ROUTES_KEY_ID in .env'));
   });
 }

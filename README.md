@@ -82,13 +82,35 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
 - Demo: `-demo ride -spotifyDemo reconnect` shows the prompt.
 
 ### Spotify token service (home PC)
-- `server/spotify-token-service.js`, plain Node (no packages), port 3010, at `https://jlmoh.com/bike-dash/spotify/` through the Cloudflare Tunnel: `POST swap` (`code`), `POST refresh` (`refresh_token`), `GET health`. Tests: `node --test server/spotify-token-service.test.js`.
+- `server/spotify-token-service.js`, plain Node (no packages), port 3010, at `https://jlmoh.com/bike-dash/spotify/` through the Cloudflare Tunnel: `POST swap` (`code`), `POST refresh` (`refresh_token`), `GET health`. Tests: `node --test server/spotify-token-service.test.js server/strava-routes.test.js`. The same service also serves the Strava routes (below).
 - Secrets in `server/.env` (git-ignored; see `server/.env.example`): `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `TOKEN_KEY` (32 random bytes, base64; a new key signs the app out). `health` answers `{"ok":false}` until all three are set.
 - Started by the Landing Hub (`landing\startup.ps1`, launcher `landing\bike-dash-spotify.ps1`, window "Bike Dash Spotify"); stopped by `restart.ps1`; watched by the System Monitor ("Bike Dash Spotify", recovers by running Home Startup). Tunnel route in `.cloudflared\config.yml`.
 - Cloudflare Access covers jlmoh.com, so `jlmoh.com/bike-dash/spotify` needs a **Bypass** Access application, like `/funnies`. Without it the app gets Access's login redirect, which it treats as "try later".
 - It never logs codes or tokens; 30 requests a minute per address; 4 KB bodies.
 - The Spotify developer app needs the redirect URI `bikedash://spotify-login-callback` and the iOS bundle ID `com.jlmoh.bikedash`. Development mode requires the owner to have Premium and allows up to 5 users.
 - The Client ID goes in `Config/Secrets.xcconfig` on the Mac as `SPOTIFY_CLIENT_ID`.
+
+## Strava routes (home PC)
+The same PC service, the same port 3010 and the same launcher also serve your saved Strava routes for the Routes screen, at `https://jlmoh.com/bike-dash/routes/`. The code is in `server/strava-routes.js` and the tests are in `server/strava-routes.test.js`.
+- **Endpoints:**
+  - `GET list` returns `{ routes: [{ id, name, kind (ride/run), distance_m, elevation_gain_m, updated_at, private, starred, summary_polyline, … }], private_hidden }`, newest first.
+  - `GET <id>/gpx` returns the route as GPX.
+  - `GET health` returns `{ ok, configured, read_all[, error] }`.
+- **Route ids are strings.** Strava's numeric ids are too big for JSON numbers, so the service passes on `id_str`.
+- **Strava access comes from Race Tracker.** Race Tracker holds the only Strava connection: Strava allows one API app per account, and a refresh can swap the refresh token for a new one, which two copies wouldn't survive. The service borrows a short-lived access token from Race Tracker over localhost (`POST /race-tracker/api/strava/token` with `x-bike-dash-secret`). It caches the token until a minute before it runs out.
+- **Private routes need the `read_all` scope** on that connection. Without it, `list` shows only public routes and says `private_hidden: true`, and `health` says `needs_read_all`. To add it, run `npm run setup-strava -- --reauth` in `race-tracker` and approve on Strava's page.
+- **Only Bike Dash can call `list` and `gpx`.** They need `Authorization: Bearer <app key>`. The key is sealed with `TOKEN_KEY` like Spotify's refresh token, and holds `ROUTES_KEY_ID`. Make one with `node server/spotify-token-service.js mint-routes-key`; it adds `ROUTES_KEY_ID` to `.env` the first time. It goes on the Mac in `Config/Secrets.xcconfig` as `BIKE_DASH_ROUTES_KEY`. A new `ROUTES_KEY_ID` retires every old key.
+- **Secrets in `server/.env`:**
+  - `RACE_TRACKER_SECRET`: the same value as `BIKE_DASH_SECRET` in Race Tracker's `.env`.
+  - `ROUTES_KEY_ID`.
+- **Access and monitoring:**
+  - The tunnel route is in `.cloudflared\config.yml`.
+  - `jlmoh.com/bike-dash/routes` needs the Cloudflare Access **Bypass**, like the Spotify path.
+  - The System Monitor check is "Bike Dash Routes" (`health` must say `"ok":true`). It isn't marked for recovery, because a restart can't fix a Strava permission.
+- **Logging and limits:**
+  - It never logs the app key or Strava tokens.
+  - It shares the Spotify paths' limit of 30 requests a minute per address.
+  - GPX files are capped at 15 MB.
 
 ## Simulator screenshots
 `ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|fallback|paused|finished|idle|history [-sheet history|settings] [-page sensors|sensorData]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware; the ride scenes send the packets the sensors would, so the sensor maths runs as on the bike, and `fallback` has the speed sensor switched off.

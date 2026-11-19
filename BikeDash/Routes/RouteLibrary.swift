@@ -157,14 +157,16 @@ final class RouteLibrary {
 
     // MARK: - Demo
 
-    /// Simulator screenshots: a few listed routes, one saved and picked.
-    func loadDemo(strava: [StravaRoute], saved demo: StravaRoute, gpx: Data) {
+    /// Simulator screenshots: a few listed routes, one saved (and picked, unless
+    /// the scene is a normal ride).
+    func loadDemo(strava: [StravaRoute], saved demo: StravaRoute, gpx: Data, pick: Bool) {
         self.strava = strava
         privateHidden = false
         listState = .loaded
         if let route = try? Route.parseGPX(gpx, fallbackName: demo.name) {
             demoFiles[demo.id] = gpx
             useForNextRide(demo, gpx: gpx, route: route)
+            if !pick { setNextRide(nil) }
         }
     }
 

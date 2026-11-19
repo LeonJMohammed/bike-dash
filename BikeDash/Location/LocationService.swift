@@ -8,8 +8,8 @@ private let log = Logger(subsystem: "com.jlmoh.bikedash", category: "location")
 
 /// Phone GPS. Hands every fix to `onFix` (the ride decides which to trust) and
 /// keeps going in the background (blue pill) so a ride isn't cut short.
-/// It runs only when the ride asks for it: GPS chosen as the speed source, or
-/// the speed sensor dropping out mid-ride.
+/// It runs only when the ride asks for it: GPS chosen as the speed source, the
+/// speed sensor dropping out mid-ride, or a ride following a route.
 @MainActor
 @Observable
 final class LocationService: NSObject {
@@ -118,7 +118,8 @@ extension LocationService: @preconcurrency CLLocationManagerDelegate {
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
                 horizontalAccuracy: location.horizontalAccuracy,
-                speed: location.speed
+                speed: location.speed,
+                course: location.courseAccuracy >= 0 ? location.course : -1
             ))
         }
     }

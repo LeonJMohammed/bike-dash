@@ -80,6 +80,10 @@ public struct RideSession: Sendable {
         public var lapStart: LapStart?
         public var cadenceTotal: Double?
         public var cadenceSamples: Int?
+        /// The picked route and the phone battery (percent) at the start and end.
+        public var routeName: String?
+        public var batteryAtStart: Int?
+        public var batteryAtEnd: Int?
     }
 
     /// Can change mid-ride (the auto-pause switch in Settings).
@@ -96,6 +100,11 @@ public struct RideSession: Sendable {
     public private(set) var ascent: Double = 0
     /// Finished laps, oldest first.
     public private(set) var laps: [Lap] = []
+    /// The route picked for this ride, if any (set by the app).
+    public var routeName: String?
+    /// The phone battery in percent at the start and end (set by the app).
+    public var batteryAtStart: Int?
+    public var batteryAtEnd: Int?
 
     private var movingBefore: TimeInterval = 0
     private var altitude = AscentCounter()
@@ -138,6 +147,9 @@ public struct RideSession: Sendable {
         lapStart = snapshot.lapStart ?? LapStart()
         cadenceTotal = snapshot.cadenceTotal ?? 0
         cadenceSamples = snapshot.cadenceSamples ?? 0
+        routeName = snapshot.routeName
+        batteryAtStart = snapshot.batteryAtStart
+        batteryAtEnd = snapshot.batteryAtEnd
     }
 
     public var snapshot: Snapshot {
@@ -156,7 +168,10 @@ public struct RideSession: Sendable {
             laps: laps,
             lapStart: lapStart,
             cadenceTotal: cadenceTotal,
-            cadenceSamples: cadenceSamples
+            cadenceSamples: cadenceSamples,
+            routeName: routeName,
+            batteryAtStart: batteryAtStart,
+            batteryAtEnd: batteryAtEnd
         )
     }
 

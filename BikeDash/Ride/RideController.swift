@@ -12,7 +12,8 @@ private let log = Logger(subsystem: "com.jlmoh.bikedash", category: "ride")
 /// survives the app closing, and adds finished rides to the history.
 ///
 /// Speed and distance come from the speed sensor unless Settings says GPS.
-/// GPS then runs only as a fallback, when the sensor drops out mid-ride.
+/// GPS then runs only as a fallback, when the sensor drops out mid-ride, or
+/// to follow a route picked for the ride (still not for speed or distance).
 @MainActor
 @Observable
 final class RideController {
@@ -27,6 +28,8 @@ final class RideController {
     let history: RideHistory
     /// The route picked for the next ride; it clears when that ride ends.
     let routes: RouteLibrary
+    /// Following the picked route, while a ride with one is under way.
+    private(set) var navigator: RouteNavigator?
     let dimmer = ScreenDimmer()
     let liveActivity = LiveActivityController()
     /// Bumped when a tap on the Live Activity asks for the ride screen, so any
@@ -133,7 +136,10 @@ final class RideController {
     func start(at time: Date = Date()) {
         session.resetAltitudeReference()
         altimeter.start()
+        session.batteryAtStart = Battery.percent()
         session.start(at: time)
+        // Before the speed source is picked, so GPS starts for the route.
+        startNavigation()
         refreshSource(at: time)
         startTicker()
         updateScreenLock()
@@ -161,6 +167,7 @@ final class RideController {
     }
 
     func finish() {
+        session.batteryAtEnd = Battery.percent()
         session.finish(at: Date())
         altimeter.stop()
         stopTicker()
@@ -177,12 +184,15 @@ final class RideController {
         }
         // A route was for this ride only (Leon's choice): the next is a normal ride.
         routes.rideFinished()
+        navigator = nil
+        updateGPS()
         updateScreenLock()
         save()
     }
 
     /// Clears the summary for the next ride.
     func newRide() {
+        navigator = nil
         session = RideSession(settings: Self.sessionSettings(autoPause: autoPause, source: picker.source, autoLapKm: autoLapKm))
         lapsSeen = 0
         dismissLap()
@@ -267,6 +277,48 @@ final class RideController {
     /// A tap on the Live Activity: the ride screen, with any sheet closed.
     func showRideScreen() {
         rideScreenRequests += 1
+    }
+
+    // MARK: - Route
+
+    /// The route on screen: the one being followed, or before a ride the one
+    /// picked for it. Nil means the normal ride screen.
+    var mapRoute: Route? {
+        if let navigator { return navigator.route }
+        guard session.state == .idle, let saved = routes.nextRide else { return nil }
+        return routes.route(for: saved)
+    }
+
+    /// A ride is starting (or being picked up again) with a route picked.
+    private func startNavigation() {
+        guard let saved = routes.nextRide, let route = routes.route(for: saved) else {
+            navigator = nil
+            return
+        }
+        navigator = RouteNavigator(saved: saved, route: route)
+        session.routeName = saved.name
+    }
+
+    /// A turn ahead: one buzz. Off the route: a buzz and the chime. Either
+    /// brightens a dimmed screen and takes a lap summary away.
+    private func handle(_ events: [RouteNavigator.Event]) {
+        for event in events {
+            switch event {
+            case .turn:
+                dismissLap()
+                wakeScreen()
+                if !DemoMode.isOn { AudioServicesPlaySystemSound(kSystemSoundID_Vibrate) }
+            case .offRoute:
+                dismissLap()
+                wakeScreen()
+                if !DemoMode.isOn {
+                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                    AudioServicesPlaySystemSound(1007)  // the tri-tone; silent with the ringer off
+                }
+            case .backOnRoute:
+                break
+            }
+        }
     }
 
     /// The ride's numbers for the Live Activity.
@@ -369,11 +421,12 @@ final class RideController {
     }
 
     /// GPS runs only when it's the source: as the chosen source while the app
-    /// is open or a ride is under way, or as the fallback.
+    /// is open or a ride is under way, or as the fallback. And while a ride
+    /// with a route is under way, for the map and the warnings.
     private func updateGPS() {
         let wanted: Bool
         switch picker.source {
-        case .sensor: wanted = false
+        case .sensor: wanted = navigator != nil && session.isActive
         case .gps: wanted = appIsActive || session.isActive
         case .gpsFallback: wanted = true
         }
@@ -385,6 +438,10 @@ final class RideController {
     }
 
     private func gotFix(_ fix: GPSFix) {
+        if session.isActive, let navigator {
+            handle(navigator.add(fix, riding: session.state == .riding))
+        }
+        // With the sensor in use, GPS is only for the route.
         guard picker.source != .sensor else { return }
         session.add(fix)
         showNewLaps()
@@ -464,6 +521,8 @@ final class RideController {
             dismissLap()
         }
         updateReminder(at: now)
+        // Keep the screen bright while a turn is coming up.
+        if navigator?.turn != nil { dimmer.wake(at: now) }
         dimmer.update(at: now, rideActive: session.isActive, appActive: inFront)
         updateLiveActivity(at: now)
         if now.timeIntervalSince(lastSavedAt) >= 10 {
@@ -509,6 +568,8 @@ final class RideController {
         if session.isActive {
             session.resetAltitudeReference()
             altimeter.start()
+            // The route is still picked (it clears when the ride ends).
+            startNavigation()
             startTicker()
             // The countdown isn't saved: a full interval from here.
             restartReminder()

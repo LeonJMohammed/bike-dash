@@ -62,8 +62,16 @@ struct HistoryRow: View {
             Text(detail)
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(Theme.dim)
+            if let routeName = record.routeName {
+                Label(routeName, systemImage: "map")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.route)
+                    .lineLimit(1)
+            }
         }
         .padding(.vertical, 6)
+        // The divider starts at the row's edge, not at the route label's text.
+        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
     }
 
     private var detail: String {

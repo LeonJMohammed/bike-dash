@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// One screen: the numbers, a row of small ride buttons, Spotify, and the heart
-/// rate zone strip along the very bottom. Routes, History and Settings open as
-/// sheets from the small buttons.
+/// One screen: the numbers (with a route picked, fewer numbers and the map), a
+/// row of small ride buttons, Spotify, and the heart rate zone strip along the
+/// very bottom. Routes, History and Settings open as sheets from the small buttons.
 struct MainView: View {
     enum Panel: String, Identifiable {
         case routes, history, settings
@@ -20,6 +20,8 @@ struct MainView: View {
         VStack(spacing: 0) {
             if let lap = ride.lapShowing {
                 LapPage(lap: lap) { ride.dismissLap() }
+            } else if let route = ride.mapRoute {
+                RouteRidePage(ride: ride, route: route, navigator: ride.navigator)
             } else {
                 MetricsPage(ride: ride)
             }

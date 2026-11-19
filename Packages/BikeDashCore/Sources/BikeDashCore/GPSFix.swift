@@ -10,13 +10,17 @@ public struct GPSFix: Equatable, Sendable {
     public var horizontalAccuracy: Double
     /// Doppler speed in m/s; negative means invalid.
     public var speed: Double
+    /// Direction of travel in degrees from north; negative means invalid
+    /// (standing still, or iOS isn't sure). Only route following uses it.
+    public var course: Double
 
-    public init(time: Date, latitude: Double, longitude: Double, horizontalAccuracy: Double, speed: Double) {
+    public init(time: Date, latitude: Double, longitude: Double, horizontalAccuracy: Double, speed: Double, course: Double = -1) {
         self.time = time
         self.latitude = latitude
         self.longitude = longitude
         self.horizontalAccuracy = horizontalAccuracy
         self.speed = speed
+        self.course = course
     }
 
     /// Mean Earth radius in metres.

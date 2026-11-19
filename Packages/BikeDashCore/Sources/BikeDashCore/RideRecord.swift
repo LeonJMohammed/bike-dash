@@ -17,6 +17,17 @@ public struct RideRecord: Codable, Hashable, Identifiable, Sendable {
     public var maxHeartRate: Int?
     /// The splits; nil for rides saved before laps existed.
     public var laps: [Lap]?
+    /// The route followed, if one was picked.
+    public var routeName: String? = nil
+    /// The phone battery in percent at the start and end, when iOS said.
+    public var batteryAtStart: Int? = nil
+    public var batteryAtEnd: Int? = nil
+
+    /// "Battery 92% → 81%", when both ends are known.
+    public var batteryText: String? {
+        guard let batteryAtStart, let batteryAtEnd else { return nil }
+        return "Battery \(batteryAtStart)% → \(batteryAtEnd)%"
+    }
 
     /// Average moving speed, m/s.
     public var averageSpeed: Double? {
@@ -50,7 +61,10 @@ extension RideSession {
             maxSpeed: maxSpeed,
             averageHeartRate: averageHeartRate,
             maxHeartRate: maxHeartRate > 0 ? maxHeartRate : nil,
-            laps: laps
+            laps: laps,
+            routeName: routeName,
+            batteryAtStart: batteryAtStart,
+            batteryAtEnd: batteryAtEnd
         )
     }
 }

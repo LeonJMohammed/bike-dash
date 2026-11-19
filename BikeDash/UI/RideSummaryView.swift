@@ -30,9 +30,10 @@ struct RideSummaryView: View {
                         "MAX HR", record.maxHeartRate.map { "\($0)" } ?? "--"
                     )
                     HorizontalRule()
-                    Text("Elapsed \(RideFormat.clock(record.elapsedTime)) · Garmin has the full record")
+                    Text(footnote)
                         .font(.footnote)
                         .foregroundStyle(Theme.dim)
+                        .multilineTextAlignment(.center)
                         .padding(.vertical, 12)
                     if !record.splits.isEmpty {
                         HorizontalRule()
@@ -53,6 +54,14 @@ struct RideSummaryView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
+    }
+
+    /// Elapsed time, then the route and the battery used, when there are any.
+    private var footnote: String {
+        var lines = ["Elapsed \(RideFormat.clock(record.elapsedTime)) · Garmin has the full record"]
+        if let routeName = record.routeName { lines.append("Route: \(routeName)") }
+        if let battery = record.batteryText { lines.append(battery) }
+        return lines.joined(separator: "\n")
     }
 
     private var title: String {

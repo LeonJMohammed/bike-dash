@@ -109,7 +109,18 @@ Only committed code is built. The Mac's copy updates on every push (`receive.den
   - Between parts of the route that are about as close, it picks the one nearest the last progress. Going backwards counts three times over.
   - A part pointing against the rider's heading counts as 100 m further away. The heading comes from the phone's GPS course, or from the last fixes 8 m or more apart. Strava draws the way back of an out-and-back on the very same line, so without this, GPS error along the road at the turnaround could make it follow the way out backwards. It's a cost, not a filter, so a wrong heading from GPS noise can't throw progress far along the route.
   - **Checked against a real route:** Leon's Brian Lara Cricket Academy Loop (23.2 km, 358 points, several out-and-backs), ridden in simulation with 8 m of GPS error in each direction, a drifting error and random jitter. Progress stays within about 35 m (within 27 m with the GPS course) and never runs backwards.
-- **Demo:** `-demo idle -sheet routes [-page routePreview]` shows four listed routes and a picked Savannah loop.
+- **Demo:** `-demo idle -sheet routes [-page routePreview]` shows four listed routes and a picked Savannah block.
+
+### Riding a route
+- **The map layout:** with a route picked, the ride screen has the status strip, then **speed and heart rate** large, then **to go** (km left on the route) and **moving time**, then the map. The ride buttons, Spotify and the zone strip stay as they are. Before the ride the map shows the whole route; once riding, it follows you, turned to the way you're going, with the ridden part grey. The map can't be dragged, so a bump or rain doesn't move it. Riding to the start, "to go" reads **to route** with the distance to the line.
+- **Changing the layout:** `RouteRideLayout` at the top of `BikeDash/UI/RouteRidePage.swift` lists the rows (speed, heart rate, to go, time, distance, cadence) and how much of the page the numbers take.
+- **GPS:** on only while a ride with a route is under way (paused included), for the map, the turns and off-route alerts. Speed and distance still come from the sensors. A ride without a route is exactly as before, with GPS off.
+- **Turn warnings:** found from the route's shape (`RouteTurns` in core): the direction over the 30 m before each route point against the 30 m after. 40 degrees or more is a turn (slight up to 65, sharp from 120). A turn of 150 or more that comes back along the same road is **turn around**, for out-and-backs; a hairpin is a sharp turn. About **100 m** before a turn, a cyan banner across the top of the map shows the arrow, the turn and the distance (to 10 m, "NOW" at the turn), with **one buzz** (no chime, Leon's choice). The banner stays until 15 m past the turn and keeps the screen bright. One buzz per turn. It can't know a road just bends at a junction, so a main road curving 40 degrees or more also gets a warning.
+- **Off route:** more than **40 m** from the route for **10 s** while riding: an orange OFF ROUTE banner with the distance, a buzz and the chime. It clears once back within 30 m. Nothing while riding to the start (until first within 40 m of the route), and time paused doesn't count. No rerouting.
+- **Laps:** a turn warning or off-route alert takes a lap summary off the screen.
+- **Battery:** each ride keeps the phone's battery at the start and end. The summary shows "Battery 92% → 81%" with the route's name, and History rows show the route.
+- **Checked on Leon's real route** (simulated ride with drifting GPS error and the GPS course): 20 turns, 12 of them "turn around", each warned once 60 to 120 m before, no false off-route alerts.
+- **Demo:** `-demo route` rides the Savannah block, `-demo routeTurn` is just before a corner, `-demo offRoute` is 60 m off it; `-demo idle` shows the picked route before the ride.
 
 ### Routes service (home PC)
 The same PC service, the same port 3010 and the same launcher also serve your saved Strava routes for the Routes screen, at `https://jlmoh.com/bike-dash/routes/`. The code is in `server/strava-routes.js` and the tests are in `server/strava-routes.test.js`.
@@ -134,7 +145,7 @@ The same PC service, the same port 3010 and the same launcher also serve your sa
   - GPX files are capped at 15 MB.
 
 ## Simulator screenshots
-`ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|fallback|paused|finished|idle|history [-sheet history|settings] [-page sensors|sensorData]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware; the ride scenes send the packets the sensors would, so the sensor maths runs as on the bike, and `fallback` has the speed sensor switched off.
+`ssh mac 'bash ~/bike-dash/scripts/sim-shot.sh <name> -demo ride|fallback|lap|paused|finished|idle|history|route|routeTurn|offRoute [-sheet routes|history|settings] [-page sensors|sensorData|routePreview]'` builds for the iPhone simulator and saves `/tmp/bike-dash-<name>.png` on the Mac. Demo mode fakes the data and touches no hardware; the ride scenes send the packets the sensors would, so the sensor maths runs as on the bike, and `fallback` has the speed sensor switched off.
 
 ## Mac-only files (never in git)
 - `~/bike-dash/Config/Secrets.xcconfig`: `DEVELOPMENT_TEAM`, `SPOTIFY_CLIENT_ID`, `BIKE_DASH_ROUTES_KEY` (the routes app key from the PC)

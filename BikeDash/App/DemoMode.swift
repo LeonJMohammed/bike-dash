@@ -2,18 +2,30 @@ import BikeDashCore
 import Foundation
 
 /// For simulator screenshots only. Launch with
-/// `-demo ride|fallback|lap|paused|finished|idle|history`, and optionally
-/// `-sheet routes|history|settings` and `-page sensors|sensorData|routePreview`.
-/// Every scene has a few Strava routes listed and one picked for the next ride.
+/// `-demo ride|fallback|lap|paused|finished|idle|history|route|routeTurn|offRoute`,
+/// and optionally `-sheet routes|history|settings` and
+/// `-page sensors|sensorData|routePreview`.
+/// Every scene has a few Strava routes listed and a block round the Savannah
+/// saved; `idle` and the route scenes have it picked, so they show the map.
 /// Shows fake data, uses no Bluetooth, GPS, barometer or Spotify, and saves nothing.
 /// The ride scenes send the same sensor packets the real sensors would, so the
 /// sensor maths runs as it does on the bike; `fallback` has the speed sensor
-/// switched off, so GPS takes over.
+/// switched off, so GPS takes over. The route scenes ride the block: `route`
+/// mid-way along a side, `routeTurn` just before a corner, `offRoute` 60 m off it.
 enum DemoMode {
     static let scene: String? = UserDefaults.standard.string(forKey: "demo")
     static var isOn: Bool { scene != nil }
 
     private static let metresPerDegree = GPSFix.earthRadius * .pi / 180
+
+    /// The route scenes, and where on the block each ends its replay (metres).
+    private static let routeTargets = ["route": 1100.0, "routeTurn": 1545, "offRoute": 1100]
+    private static var followsRoute: Bool { scene.map { routeTargets[$0] != nil } ?? false }
+    @MainActor private static var demoRoute: Route?
+    /// Replayed distance + this = metres along the block.
+    @MainActor private static var routeShift = 0.0
+    /// From this replayed distance on, `offRoute` rides 60 m to the side.
+    @MainActor private static var offFrom = Double.infinity
 
     /// Where a replayed ride has got to.
     private struct Progress {
@@ -26,17 +38,28 @@ enum DemoMode {
     @MainActor
     static func load(ride: RideController, spotify: SpotifyController, history: RideHistory, routes: RouteLibrary) {
         spotify.loadDemo()
-        loadRoutes(routes)
+        loadRoutes(routes, pick: scene == "idle" || followsRoute)
         switch scene {
         case "idle":
             break
         case "history":
             for (daysAgo, minutes, kmh) in [(1, 42.0, 27.3), (3, 65.0, 25.1), (6, 31.0, 28.8)] {
-                if let record = record(daysAgo: daysAgo, minutes: minutes, kmh: kmh) {
+                if var record = record(daysAgo: daysAgo, minutes: minutes, kmh: kmh) {
+                    if daysAgo == 1 {
+                        record.routeName = "Savannah block"
+                        record.batteryAtStart = 94
+                        record.batteryAtEnd = 86
+                    }
                     history.add(record)
                 }
             }
         default:
+            if followsRoute, let scene, let target = routeTargets[scene] {
+                // Where the replay ends: `target` metres along the block.
+                let travelled = (0...2530).reduce(0.0) { $0 + speedAt($1) }
+                routeShift = target - travelled
+                offFrom = scene == "offRoute" ? travelled - 150 : .infinity
+            }
             let progress = replay(into: ride, seconds: 2530)
             switch scene {
             case "paused": ride.pause()
@@ -88,7 +111,13 @@ enum DemoMode {
         let clock = Double(progress.second)
         let speed = speedAt(progress.second)
         progress.north += speed
-        ride.location.onFix?(fix(at: time, north: progress.north, speed: speed))
+        if followsRoute {
+            if let fix = routeFix(at: time, travelled: progress.north, speed: speed) {
+                ride.location.onFix?(fix)
+            }
+        } else {
+            ride.location.onFix?(fix(at: time, north: progress.north, speed: speed))
+        }
 
         if scene != "fallback" {
             let circumference = ride.sensors.circumferenceMetres
@@ -123,11 +152,13 @@ enum DemoMode {
         return session.record()
     }
 
-    /// Listed Strava routes, with a loop round the Savannah saved and picked.
+    /// Listed Strava routes, with a block round the Savannah saved (and picked).
     @MainActor
-    private static func loadRoutes(_ routes: RouteLibrary) {
-        let loop = StravaRoute(id: "3344550000000000123", name: "Savannah loop", kind: .ride, distance: 3720,
-                               elevationGain: 24, updatedAt: "2026-11-02T09:00:00Z")
+    private static func loadRoutes(_ routes: RouteLibrary, pick: Bool) {
+        let gpx = savannahGPX()
+        demoRoute = try? Route.parseGPX(gpx, fallbackName: "Savannah block")
+        let loop = StravaRoute(id: "3344550000000000123", name: "Savannah block", kind: .ride, distance: 4200,
+                               elevationGain: 26, updatedAt: "2026-11-02T09:00:00Z")
         let listed = [
             loop,
             StravaRoute(id: "3344550000000000456", name: "Chaguaramas out and back", kind: .ride, distance: 32_400,
@@ -137,29 +168,53 @@ enum DemoMode {
             StravaRoute(id: "3344550000000000999", name: "Grand Stand 5K", kind: .run, distance: 5080,
                         elevationGain: 25, updatedAt: "2026-10-23T05:00:00Z"),
         ]
-        routes.loadDemo(strava: listed, saved: loop, gpx: savannahGPX())
+        routes.loadDemo(strava: listed, saved: loop, gpx: gpx, pick: pick)
     }
 
-    /// An oval about 3.7 km round, with a gentle rise on the north side.
+    /// A block 1.2 km by 0.9 km round the Savannah, clockwise from the middle of
+    /// the north side (four right turns), a point every 25 m, a gentle rise north.
     private static func savannahGPX() -> Data {
         let centre = (lat: 10.6705, lon: -61.5135)
         let east = metresPerDegree * cos(centre.lat * .pi / 180)
+        let corners: [(north: Double, east: Double)] = [(600, 0), (600, 450), (-600, 450), (-600, -450), (600, -450), (600, 0)]
         var body = ""
-        for step in 0...120 {
-            let angle = Double(step) / 120 * 2 * .pi
-            let north = 680 * cos(angle), eastward = 500 * sin(angle)
-            let lat = centre.lat + north / metresPerDegree
-            let lon = centre.lon + eastward / east
-            let ele = 22 + 12 * cos(angle) + 2 * sin(angle * 5)
-            body += String(format: "<trkpt lat=\"%.6f\" lon=\"%.6f\"><ele>%.1f</ele></trkpt>\n", lat, lon, ele)
+        func add(_ north: Double, _ eastward: Double) {
+            let ele = 22 + 12 * north / 600 + 2 * sin(eastward / 90)
+            body += String(format: "<trkpt lat=\"%.6f\" lon=\"%.6f\"><ele>%.1f</ele></trkpt>\n",
+                           centre.lat + north / metresPerDegree, centre.lon + eastward / east, ele)
+        }
+        add(corners[0].north, corners[0].east)
+        for (a, b) in zip(corners, corners.dropFirst()) {
+            let length = abs(b.north - a.north) + abs(b.east - a.east)
+            let steps = Int(length / 25)
+            for i in 1...steps {
+                let t = Double(i) / Double(steps)
+                add(a.north + t * (b.north - a.north), a.east + t * (b.east - a.east))
+            }
         }
         return Data("""
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx creator="StravaGPX" version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
-        <trk><name>Savannah loop</name><trkseg>
+        <trk><name>Savannah block</name><trkseg>
         \(body)</trkseg></trk>
         </gpx>
         """.utf8)
+    }
+
+    /// A route scene's GPS fix: on the block (none before its start), with the
+    /// course the phone would give, or 60 m to the side for `offRoute`.
+    @MainActor
+    private static func routeFix(at time: Date, travelled: Double, speed: Double) -> GPSFix? {
+        guard let route = demoRoute else { return nil }
+        let along = travelled + routeShift
+        guard along >= 0, along <= route.length else { return nil }
+        let course = Geo.bearing(route.point(atDistance: along - 5), route.point(atDistance: along + 5))
+        var point = route.point(atDistance: along)
+        if travelled >= offFrom {
+            point = Geo.offset(point, bearing: course + 90, distance: 60)
+        }
+        return GPSFix(time: time, latitude: point.latitude, longitude: point.longitude,
+                      horizontalAccuracy: 4, speed: speed, course: course)
     }
 
     /// About 27 km/h, drifting a little.

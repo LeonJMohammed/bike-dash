@@ -186,6 +186,17 @@ public enum Geo {
         let degrees = atan2(y, x) * 180 / .pi
         return (degrees + 360).truncatingRemainder(dividingBy: 360)
     }
+
+    /// The point `distance` metres from `p` towards `bearing` (flat Earth:
+    /// fine for the few hundred metres the ride map looks ahead).
+    public static func offset(_ p: RoutePoint, bearing: Double, distance: Double) -> RoutePoint {
+        let metresPerDegree = GPSFix.earthRadius * .pi / 180
+        let r = bearing * .pi / 180
+        return RoutePoint(
+            latitude: p.latitude + cos(r) * distance / metresPerDegree,
+            longitude: p.longitude + sin(r) * distance / (metresPerDegree * cos(p.latitude * .pi / 180))
+        )
+    }
 }
 
 /// XMLParser delegate for GPX: collects trkpt/rtept with ele, and the first name.
